@@ -2,7 +2,12 @@
 
 
 
+import io
 from models import Get, Job, Put, Resource, ResourceConfig, ResourceType
+import ruamel.yaml
+from textwrap import dedent, indent
+
+yaml = ruamel.yaml.YAML()
 
 
 def test_ResourceConfig():
@@ -12,6 +17,32 @@ def test_ResourceConfig():
     assert test0 != ResourceConfig('ax', 'b')
     assert test0 != ResourceConfig('a', 'bx')
     assert test0 != ResourceConfig('ax', 'bx')
+
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    test1 = yaml.load(stream.getvalue())
+    print(test1)
+    assert test0 == test1
+
+    # assert stream.getvalue() == dedent("""\
+    #     !ResourceConfig
+    #     repository: a
+    #     tag: b
+    #     """)
+
+
+    # print(stream.getvalue())
+
+    # data = yaml.load(dedent("""\
+    #     !ResourceConfig
+    #     repository: a
+    #     tag: b
+    #     """))
+    # print(data)
+
+
+
 
 def test_ResourceType():
     test0 = ResourceType('a', 'b', ResourceConfig('c', 'd'))
