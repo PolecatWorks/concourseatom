@@ -336,7 +336,12 @@ class FullThing:
         print(f'R rewrites = {resource_rewrites}')
 
 
-
+        For the jobs. Need to recurse through the obejcts to apply rewrites to them based on resource rewrites.
+        This will result in the correctly nameed/mapped resources in teh bThing to match the merged resources.
+        Next step is to work out how to merge the jobs:
+            1. Dont merge just keep them together (side by side). (should be simple viable optoin)
+            2. Work out where they share name and share parts of pipeline then merge those.    (MAYBE not a good idea)
+            3.
 
 
 
