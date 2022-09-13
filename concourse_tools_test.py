@@ -124,16 +124,17 @@ def test_FullThing():
             ResourceType('a', 'x', {}),
         ],
         resources=[
-            # Resource('a', 'b', {}),
+            Resource('b', 'a', {}),
         ],
         jobs=[]
         )
+
     assert test0 == FullThing(
         resource_types=[
             ResourceType('a', 'x', {}),
         ],
         resources=[
-            # Resource('a', 'b', {}),
+            Resource('b', 'a', {}),
         ],
         jobs=[]
         )
@@ -145,8 +146,8 @@ def test_FullThing():
             ResourceType('c', 'y', {}),
         ],
         resources=[
-            # Resource('a', 'b', {}),
-            # Resource('ax', 'b', {}),
+            Resource('a', 'b', {}),
+            Resource('ax', 'c', {}),
         ],
         jobs=[]
         )

@@ -1,5 +1,6 @@
 
 from __future__ import annotations
+import dataclasses
 from typing import Any, Dict, Optional, List, Tuple, Union
 import ruamel.yaml
 from dataclasses import dataclass, field
@@ -151,8 +152,9 @@ class Resource:
 
     @classmethod
     def rewrite(cls, in_list: List[Resource], rewrites: Dict[str, str]) -> List[Resource]:
-        pass
-        # return [resource]
+
+        return [dataclasses.replace(resource, type=rewrites[resource.type]) for resource in in_list]
+
 
 yaml.register_class(Resource)
 
@@ -326,26 +328,21 @@ class FullThing:
         print(f'RT = {resource_types}')
         print(f'RT rewrites = {resource_types_rewrites}')
 
-
+        bThing_resource_renames = Resource.rewrite(bThing.resources, resource_types_rewrites)
 
         # resources_input = Resource.rewrite(aThing.resources + bThing.resources, resource_types_rewrites)
-        resources, resource_rewrites = Resource.uniques_and_rewrites(aThing.resources, bThing.resources)
+        resources, resource_rewrites = Resource.uniques_and_rewrites(aThing.resources, bThing_resource_renames)
         print(f'R = {resources}')
         print(f'R rewrites = {resource_rewrites}')
 
 
-        resources = aThing.resources.copy()
 
-        for resource in bThing.resources:
-            if resource in resources:
-                print(f'Resource {resource} already exists')
-            else:
-                resources.append(resource)
+
 
 
 
         return FullThing(
-            resource_types=[],
+            resource_types=resource_types,
             resources=resources,
             jobs=[]
             )
