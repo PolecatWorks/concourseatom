@@ -56,6 +56,23 @@ def test_ResourceType():
 
     assert test0 != ResourceType('a', 'b', {} ,True)
 
+    resource_types, rewrites = Resource.uniques_and_rewrites([
+        ResourceType('a', 'x', {}),
+        ResourceType('c', 'y', {}),
+    ], [
+        ResourceType('b', 'x', {}),
+        ResourceType('a', 'z', {}),
+    ])
+    assert resource_types == [
+        ResourceType('a', 'x', {}),
+        ResourceType('c', 'y', {}),
+        ResourceType('c', 'z', {}),
+    ]
+    assert rewrites == {
+        'b': 'a',
+        'a': 'a-0'
+    }
+
 
 def test_Resource():
     test0 = Resource('a', 'b', {})
