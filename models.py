@@ -1,17 +1,13 @@
 
-from typing import Any, Dict, Optional, List, Union
+from __future__ import annotations
+from typing import Any, Dict, Optional, List, Tuple, Union
 import ruamel.yaml
 from dataclasses import dataclass, field
 
+# from typing import Self
+
+
 yaml = ruamel.yaml.YAML()
-
-@dataclass
-class ResourceConfig:
-    repository: str
-    tag: str
-
-
-yaml.register_class(ResourceConfig)
 
 
 
@@ -19,12 +15,67 @@ yaml.register_class(ResourceConfig)
 class ResourceType:
     name: str
     type: str
-    source: ResourceConfig
+    source: Dict[str, Any] = field(default_factory=dict)
     privileged: bool = False
     params: Dict[str, Any] = field(default_factory=dict)
     check_every: str = '1m'
     tags: list[str] = field(default_factory=list)
     defaults: Dict[str, Any] = field(default_factory=dict)
+
+    def __eq__(self, other: ResourceType) -> bool:
+        return self.type == other.type and self.source == other.source and self.privileged == other.privileged \
+            and self.params == other.params and self.check_every == other.check_every and self.tags == other.tags \
+            and self.defaults == other.defaults
+
+    def exactEq(self, other: ResourceType) -> bool:
+        return self.name == other.name and self == other
+
+    @classmethod
+    def uniques_and_rewrites(cls, aList: List[ResourceType], bList: List[ResourceType]) -> Tuple[List[ResourceType],Dict[str,str]]:
+        """
+        aList gets priority and copied verbatim
+        If item already exists in aList then create rewrite for that
+        If name already exists in aList then create rewrite for that
+        capture list of appended items to be added to aList
+
+        return the final list
+        """
+
+        ret_list: List[ResourceType] = aList.copy()
+        appendMap: Dict[str, str] = {}
+
+        for item in bList:
+            if item in ret_list: # Item already exists so just map it
+                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
+            elif [resource for resource in ret_list if resource.name == item.name]: # Name already used for different item so rename it and then add
+                b_name_alt = 'fff'
+                # todo: check alt is unique in ret_list
+                appendMap[item.name] = b_name_alt
+                item.name = b_name_alt
+                ret_list.append(item)
+            else: # Item is unique so add it
+                appendMap[item.name] = item.name
+                ret_list.append(item)
+
+        return ret_list, appendMap
+
+
+    # @classmethod
+    # def uniques_and_rewrites(cls, in_list: List[ResourceType]) -> List[ResourceType]:
+    #     """
+    #     Return list of unique items and rewrites for those that are duplicates
+    #     ToDo: Also need to check for reuse of names
+    #     """
+    #     ret_list: List[ResourceType] = []
+    #     rewrites: Dict[str, str] = {}
+
+    #     for item in in_list:
+    #         if item in ret_list:
+    #             rewrites[item.name] = next(obj.name for obj in in_list if obj == item)
+    #         else:
+    #             ret_list.append(item)
+
+    #     return ret_list, rewrites
 
 yaml.register_class(ResourceType)
 
@@ -44,17 +95,67 @@ class Resource:
     public: bool = False
     webhook_token: Optional[str] = None
 
+    def __eq__(self, other: Resource) -> bool:
+        return self.type == other.type and self.source == other.source and self.old_name == other.old_name \
+            and self.ico == other.ico and self.version == other.version and self.check_every == other.check_every \
+            and self.check_timeout == other.check_timeout and self.expose_build_created_by == other.expose_build_created_by \
+            and self.tags == other.tags and self.public == other.public and self.webhook_token == other.webhook_token
+
+    def exactEq(self, other: Resource) -> bool:
+        return self.name == other.name and self == other
+
+
+    @classmethod
+    def uniques_and_rewrites(cls, aList: List[Resource], bList: List[Resource]) -> Tuple[List[Resource],Dict[str,str]]:
+
+        ret_list: List[Resource] = aList.copy()
+        appendMap: Dict[str, str] = {}
+
+        for item in bList:
+            if item in ret_list: # Item already exists so just map it
+                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
+            elif [resource for resource in ret_list if resource.name == item.name]: # Name already used for different item so rename it and then add
+                unique_num = 0
+                while [resource for resource in ret_list if resource.name == f'{item.name}-{unique_num}']:
+                    unique_num+=1
+
+                b_name_alt = f'{item.name}-{unique_num}'
+                # todo: check alt is unique in ret_list
+                appendMap[item.name] = b_name_alt
+                item.name = b_name_alt
+                ret_list.append(item)
+            else: # Item is unique so add it
+                appendMap[item.name] = item.name
+                ret_list.append(item)
+
+        return ret_list, appendMap
+
+    # @classmethod
+    # def uniques_and_rewrites(cls, in_list: List[Resource]) -> List[Resource]:
+    #     """
+    #     Return list of unique items and rewrites for those that are duplicates
+    #     """
+    #     ret_list: List[Resource] = []
+    #     rewrites: Dict[str, str] = {}
+
+    #     for item in in_list:
+    #         if item in ret_list:
+    #             rewrites[item.name] = next(obj.name for obj in in_list if obj == item)
+    #         else:
+    #             ret_list.append(item)
+
+    #     return ret_list, rewrites
+
+    #     resources_input = Resource.rewrite(aThing.resources + bThing.resources, resource_types_rewrites)
+
+
+    @classmethod
+    def rewrite(cls, in_list: List[Resource], rewrites: Dict[str, str]) -> List[Resource]:
+        pass
+        # return [resource]
 
 yaml.register_class(Resource)
 
-
-class User(object):
-    def __init__(self, name, age):
-        self.name = name
-        self.age = age
-
-
-yaml.register_class(User)
 
 
 @dataclass
@@ -95,7 +196,6 @@ class Container_limits:
     memory: int
 
 
-
 @dataclass
 class TaskConfig:
     platform: str
@@ -126,17 +226,6 @@ class Task:
 
 
 @dataclass
-class LogRetentionPolicy:
-    days: int
-    builds: int
-    minimum_succeeded_builds: int
-
-yaml.register_class(LogRetentionPolicy)
-
-
-
-
-@dataclass
 class Get:
     get: str
     resource: Optional[str] = None
@@ -161,6 +250,26 @@ class Put:
     def __post_init__(self):
         if not self.resource:
             self.resource = self.put
+
+
+
+@dataclass
+class In_parallel:
+    steps: List[Union[Get, Put, Task]] = field(default_factory=list)
+    limit: Optional[int] = None
+    fail_fast: bool = False
+
+
+@dataclass
+class LogRetentionPolicy:
+    days: int
+    builds: int
+    minimum_succeeded_builds: int
+
+yaml.register_class(LogRetentionPolicy)
+
+
+
 
 
 
@@ -200,6 +309,47 @@ class FullThing:
     resource_types: list[ResourceType] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
     jobs: List[Job] = field(default_factory=list)
+
+    @classmethod
+    def merge(cls, aThing: FullThing, bThing: FullThing) -> FullThing:
+        """
+        Merge will take two Things and create a merge of them.
+        It will resolve shared resources and map into a single name.
+        It will resolve different resources with same name into discrete resourcess.
+        """
+        print(f'My job is merging two jobs:\n  {aThing}\n  {bThing}')
+
+        # resource_types_input = aThing.resource_types + bThing.resource_types
+
+        resource_types, resource_types_rewrites = ResourceType.uniques_and_rewrites(aThing.resource_types, bThing.resource_types)
+
+        print(f'RT = {resource_types}')
+        print(f'RT rewrites = {resource_types_rewrites}')
+
+
+
+        # resources_input = Resource.rewrite(aThing.resources + bThing.resources, resource_types_rewrites)
+        resources, resource_rewrites = Resource.uniques_and_rewrites(aThing.resources, bThing.resources)
+        print(f'R = {resources}')
+        print(f'R rewrites = {resource_rewrites}')
+
+
+        resources = aThing.resources.copy()
+
+        for resource in bThing.resources:
+            if resource in resources:
+                print(f'Resource {resource} already exists')
+            else:
+                resources.append(resource)
+
+
+
+        return FullThing(
+            resource_types=[],
+            resources=resources,
+            jobs=[]
+            )
+
 
 yaml.register_class(FullThing)
 

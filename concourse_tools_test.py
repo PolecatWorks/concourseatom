@@ -3,67 +3,89 @@
 
 
 import io
-from models import Get, Job, Put, Resource, ResourceConfig, ResourceType
+from queue import Full
+from models import FullThing, Get, Job, Put, Resource, ResourceType
 import ruamel.yaml
 from textwrap import dedent, indent
 
 yaml = ruamel.yaml.YAML()
 
 
-def test_ResourceConfig():
-    test0 = ResourceConfig('a', 'b')
-    assert test0 == ResourceConfig('a', 'b')
+# def test_ResourceConfig():
+#     test0 = ResourceConfig('a', 'b')
+#     assert test0 == ResourceConfig('a', 'b')
 
-    assert test0 != ResourceConfig('ax', 'b')
-    assert test0 != ResourceConfig('a', 'bx')
-    assert test0 != ResourceConfig('ax', 'bx')
+#     assert test0 != ResourceConfig('ax', 'b')
+#     assert test0 != ResourceConfig('a', 'bx')
+#     assert test0 != ResourceConfig('ax', 'bx')
 
-    stream= io.StringIO()
-    yaml.dump(test0, stream)
+#     stream= io.StringIO()
+#     yaml.dump(test0, stream)
 
-    test1 = yaml.load(stream.getvalue())
-    print(test1)
-    assert test0 == test1
+#     test1 = yaml.load(stream.getvalue())
+#     print(test1)
+#     assert test0 == test1
 
-    # assert stream.getvalue() == dedent("""\
-    #     !ResourceConfig
-    #     repository: a
-    #     tag: b
-    #     """)
+#     # assert stream.getvalue() == dedent("""\
+#     #     !ResourceConfig
+#     #     repository: a
+#     #     tag: b
+#     #     """)
 
 
-    # print(stream.getvalue())
+#     # print(stream.getvalue())
 
-    # data = yaml.load(dedent("""\
-    #     !ResourceConfig
-    #     repository: a
-    #     tag: b
-    #     """))
-    # print(data)
+#     # data = yaml.load(dedent("""\
+#     #     !ResourceConfig
+#     #     repository: a
+#     #     tag: b
+#     #     """))
+#     # print(data)
 
 
 
 
 def test_ResourceType():
-    test0 = ResourceType('a', 'b', ResourceConfig('c', 'd'))
-    assert test0 == ResourceType('a', 'b', ResourceConfig('c', 'd'))
+    test0 = ResourceType('a', 'b', {})
+    assert test0 == ResourceType('a', 'b', {})
 
-    assert test0 != ResourceType('ax', 'b', ResourceConfig('c', 'd'))
-    assert test0 != ResourceType('a', 'bx', ResourceConfig('c', 'd'))
-    assert test0 != ResourceType('a', 'b', ResourceConfig('cx', 'd'))
-    assert test0 != ResourceType('a', 'b', ResourceConfig('c', 'dx'))
+    assert test0 == ResourceType('ax', 'b', {})
+    assert not test0.exactEq(ResourceType('ax', 'b', {}))
+    assert test0 != ResourceType('a', 'bx', {})
+    assert test0 != ResourceType('a', 'b', {'d': 'e'})
 
-    assert test0 != ResourceType('a', 'b', ResourceConfig('c', 'dx'),True)
+    assert test0 != ResourceType('a', 'b', {} ,True)
 
 
 def test_Resource():
     test0 = Resource('a', 'b', {})
     assert test0 == Resource('a', 'b', {})
 
-    assert test0 != Resource('ax', 'b', {})
+    assert test0 == Resource('ax', 'b', {})
+    assert not test0.exactEq(Resource('ax', 'b', {}))
+
     assert test0 != Resource('a', 'bx', {})
     assert test0 != Resource('a', 'b', {"c": "d"})
-    assert test0 != Resource('a', 'bx', {}, 'x')
+    assert test0 != Resource('a', 'b', {}, 'x')
+
+    resources, rewrites = Resource.uniques_and_rewrites([
+        Resource('a', 'x', {}),
+        Resource('c', 'y', {}),
+    ], [
+        Resource('b', 'x', {}),
+        Resource('a', 'z', {}),
+    ])
+    assert resources == [
+        Resource('a', 'x', {}),
+        Resource('c', 'y', {}),
+        Resource('c', 'z', {}),
+    ]
+    assert rewrites == {
+        'b': 'a',
+        'a': 'a-0'
+    }
+
+
 
 def test_Job():
     test0 = Job('a', [])
@@ -76,3 +98,42 @@ def test_Job():
         Put('a'),
         Get('b'),
     ])
+
+
+
+def test_FullThing():
+    test0 = FullThing(
+        resource_types=[
+            ResourceType('a', 'x', {}),
+        ],
+        resources=[
+            # Resource('a', 'b', {}),
+        ],
+        jobs=[]
+        )
+    assert test0 == FullThing(
+        resource_types=[
+            ResourceType('a', 'x', {}),
+        ],
+        resources=[
+            # Resource('a', 'b', {}),
+        ],
+        jobs=[]
+        )
+
+
+    test1 = FullThing(
+        resource_types=[
+            ResourceType('b', 'x', {}),
+            ResourceType('c', 'y', {}),
+        ],
+        resources=[
+            # Resource('a', 'b', {}),
+            # Resource('ax', 'b', {}),
+        ],
+        jobs=[]
+        )
+
+    merged = FullThing.merge(test0, test1)
+
+    print(merged)
