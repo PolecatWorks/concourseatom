@@ -140,6 +140,7 @@ def test_FullThing():
         )
 
 
+
     test1 = FullThing(
         resource_types=[
             ResourceType('b', 'x', {}),
