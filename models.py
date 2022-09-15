@@ -1,19 +1,26 @@
 
-from __future__ import annotations
+from __future__ import annotations # This enables forward reference of types
 import dataclasses
 from typing import Any, Dict, Optional, List, Tuple, Union
-import ruamel.yaml
-from dataclasses import dataclass, field
+from ruamel.yaml import yaml_object, YAML
 
-# from typing import Self
-
-
-yaml = ruamel.yaml.YAML()
+from dataclasses import dataclass, field, fields
 
 
+yaml = YAML()
 
+
+class SetstateInitMixin:
+    """Inject setstate function to class via a mixin"""
+    def __setstate__(self, state):
+        """Call init here so that yaml.load correctly initialises the objects. This can be a performance penalty"""
+        # self.__dict__.update(state)
+        self.__init__(**state)
+
+
+@yaml_object(yaml)
 @dataclass
-class ResourceType:
+class ResourceType(SetstateInitMixin):
     name: str
     type: str
     source: Dict[str, Any] = field(default_factory=dict)
@@ -78,11 +85,12 @@ class ResourceType:
 
     #     return ret_list, rewrites
 
-yaml.register_class(ResourceType)
+# yaml.register_class(ResourceType)
 
 
+@yaml_object(yaml)
 @dataclass
-class Resource:
+class Resource(SetstateInitMixin):
     name: str
     type: str
     source: Dict[str, Any]
@@ -156,19 +164,20 @@ class Resource:
         return [dataclasses.replace(resource, type=rewrites[resource.type]) for resource in in_list]
 
 
-yaml.register_class(Resource)
 
 
 
+@yaml_object(yaml)
 @dataclass
-class Command:
+class Command(SetstateInitMixin):
     path: str
     args: List[str] = field(default_factory=list)
     dir: Optional[str] = None
     user: Optional[str] = None
 
+@yaml_object(yaml)
 @dataclass
-class Input:
+class Input(SetstateInitMixin):
     name: str
     path: Optional[str] = None
     optional: bool = False
@@ -177,8 +186,9 @@ class Input:
         if not self.path:
             self.path = self.name
 
+@yaml_object(yaml)
 @dataclass
-class Output:
+class Output(SetstateInitMixin):
     name: str
     path: Optional[str] = None
 
@@ -187,19 +197,22 @@ class Output:
             self.path = self.name
 
 
+@yaml_object(yaml)
 @dataclass
-class Cache:
+class Cache(SetstateInitMixin):
     path: str
 
 
+@yaml_object(yaml)
 @dataclass
-class Container_limits:
+class Container_limits(SetstateInitMixin):
     cpu: int
     memory: int
 
 
+@yaml_object(yaml)
 @dataclass
-class TaskConfig:
+class TaskConfig(SetstateInitMixin):
     platform: str
     image_resource: Any
     run: Command
@@ -212,8 +225,9 @@ class TaskConfig:
 
 
 
+@yaml_object(yaml)
 @dataclass
-class Task:
+class Task(SetstateInitMixin):
     task: str
     config: Optional[TaskConfig] = None
     file: Optional[str] = None
@@ -227,8 +241,9 @@ class Task:
 
 
 
+@yaml_object(yaml)
 @dataclass
-class Get:
+class Get(SetstateInitMixin):
     get: str
     resource: Optional[str] = None
     passed: List[str] = field(default_factory=list)
@@ -241,8 +256,9 @@ class Get:
             self.resource = self.get
 
 
+@yaml_object(yaml)
 @dataclass
-class Put:
+class Put(SetstateInitMixin):
     put: str
     resource: Optional[str] = None
     inputs: str = 'all'
@@ -255,20 +271,21 @@ class Put:
 
 
 
+@yaml_object(yaml)
 @dataclass
-class In_parallel:
+class In_parallel(SetstateInitMixin):
     steps: List[Union[Get, Put, Task]] = field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
 
 
+@yaml_object(yaml)
 @dataclass
-class LogRetentionPolicy:
+class LogRetentionPolicy(SetstateInitMixin):
     days: int
     builds: int
     minimum_succeeded_builds: int
 
-yaml.register_class(LogRetentionPolicy)
 
 
 
@@ -276,8 +293,9 @@ yaml.register_class(LogRetentionPolicy)
 
 
 
+@yaml_object(yaml)
 @dataclass
-class Job:
+class Job(SetstateInitMixin):
     name: str
     plan: List[Union[Task, Get, Put]]
     old_name: Optional[str] = None
@@ -285,7 +303,7 @@ class Job:
     serial_groups: List[str] = field(default_factory=list)
     max_in_flight: Optional[int] = None
     build_log_retention: Optional[LogRetentionPolicy] = None
-    pubic: bool = False
+    public: bool = False
     disable_manual_trigger: bool = False
     interruptible: bool = False
     # on_success: Optional[Step] = None
@@ -294,17 +312,51 @@ class Job:
     # on_abort: Optional[Step] = None
     # ensure: Optional[Step] = None
 
+    def __eq__(self, other: Job) -> bool:
+        return self.plan == other.plan and self.old_name == other.old_name and self.serial == other.serial \
+            and self.serial_groups == other.serial_groups and self.max_in_flight == other.max_in_flight and self.build_log_retention == other.build_log_retention \
+            and self.public == other.public and self.disable_manual_trigger == other.disable_manual_trigger \
+            and self.interruptible == other.interruptible
 
-yaml.register_class(Job)
+    def exactEq(self, other: Job) -> bool:
+        return self.name == other.name and self == other
+
+
+    @classmethod
+    def uniques_and_rewrites(cls, aList: List[Job], bList: List[Job]) -> Tuple[List[Job],Dict[str,str]]:
+
+        ret_list: List[Job] = aList.copy()
+        appendMap: Dict[str, str] = {}
+
+        for item in bList:
+            if item in ret_list: # Item already exists so just map it
+                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
+            elif [resource for resource in ret_list if resource.name == item.name]: # Name already used for different item so rename it and then add
+                unique_num = 0
+                while [resource for resource in ret_list if resource.name == f'{item.name}-{unique_num}']:
+                    unique_num+=1
+
+                b_name_alt = f'{item.name}-{unique_num}'
+                # todo: check alt is unique in ret_list
+                appendMap[item.name] = b_name_alt
+                item.name = b_name_alt
+                ret_list.append(item)
+            else: # Item is unique so add it
+                appendMap[item.name] = item.name
+                ret_list.append(item)
+
+        return ret_list, appendMap
+
+    @classmethod
+    def rewrite(cls, in_list: List[Job], rewrites: Dict[str, str]) -> List[Job]:
+
+        # return [dataclasses.replace(job, type=rewrites[job.type]) for job in in_list]
+        print(f'REWRITE for job not implemented yet')
+        return in_list
 
 
 
-
-
-
-yaml.register_class(Job)
-
-
+@yaml_object(yaml)
 @dataclass
 class FullThing:
 
@@ -335,13 +387,17 @@ class FullThing:
         print(f'R = {resources}')
         print(f'R rewrites = {resource_rewrites}')
 
+        bThing_jobs = Job.rewrite(bThing.jobs, resource_rewrites)
 
-        For the jobs. Need to recurse through the obejcts to apply rewrites to them based on resource rewrites.
-        This will result in the correctly nameed/mapped resources in teh bThing to match the merged resources.
-        Next step is to work out how to merge the jobs:
-            1. Dont merge just keep them together (side by side). (should be simple viable optoin)
-            2. Work out where they share name and share parts of pipeline then merge those.    (MAYBE not a good idea)
-            3.
+        jobs, job_rewrites = Job.uniques_and_rewrites(aThing.jobs, bThing_jobs)
+
+
+        # For the jobs. Need to recurse through the obejcts to apply rewrites to them based on resource rewrites.
+        # This will result in the correctly nameed/mapped resources in teh bThing to match the merged resources.
+        # Next step is to work out how to merge the jobs:
+        #     1. Dont merge just keep them together (side by side). (should be simple viable optoin)
+        #     2. Work out where they share name and share parts of pipeline then merge those.    (MAYBE not a good idea)
+        #     3.
 
 
 
@@ -349,11 +405,5 @@ class FullThing:
         return FullThing(
             resource_types=resource_types,
             resources=resources,
-            jobs=[]
+            jobs=jobs
             )
-
-
-yaml.register_class(FullThing)
-
-# def test_answer():
-#     assert 5 == 5

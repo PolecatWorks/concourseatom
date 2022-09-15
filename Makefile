@@ -14,4 +14,5 @@ venv:
 	$(PIP) install -r requirements.txt
 
 test:
-	$(PYTEST) -rP --pdb
+	$(PYTEST) -rP --pdb -k FullThing_merge
+	# -k Resource

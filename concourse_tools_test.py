@@ -73,6 +73,46 @@ def test_ResourceType():
         'a': 'a-0'
     }
 
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    print(stream.getvalue())
+
+    test1 = yaml.load(stream.getvalue())
+    assert test0 == test1
+
+
+    test2 = yaml.load(dedent("""
+        !ResourceType
+        name: a
+        type: b
+        source: {}
+    """))
+    print(f'test2 = {test2}')
+
+    assert test0 == test2
+
+    test3 = yaml.load(dedent("""
+        !ResourceType
+        name: a
+        type: b
+        source:
+          abc: def
+        privileged: True
+        params:
+          abb: ddd
+        check_every: 10m
+        tags:
+        - abc
+        - def
+        defaults:
+          acc: rby
+          add: fhfh
+    """))
+
+    print(f'test3 = {test3}')
+
+
 
 def test_Resource():
     test0 = Resource('a', 'b', {})
@@ -103,6 +143,51 @@ def test_Resource():
     }
 
 
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    print(stream.getvalue())
+
+    test1 = yaml.load(stream.getvalue())
+    assert test0 == test1
+
+
+
+    test2 = yaml.load(dedent("""
+        !Resource
+        name: a
+        type: b
+        source: {}
+    """))
+    print(f'test2 = {test2}')
+
+    assert test0 == test2
+
+    test3 = yaml.load(dedent("""
+        !Resource
+        name: a
+        type: b
+        source:
+          abc: def
+        old_name: bruce
+        ico: icon1
+        version: v1
+        check_every: 10m
+        check_timeout: 1m
+        expose_build_created_by: True
+        tags:
+        - abc
+        - def
+        public: True
+        webhook_token: abcd
+    """))
+
+    print(f'test3 = {test3}')
+
+
+
+
+
 
 def test_Job():
     test0 = Job('a', [])
@@ -116,6 +201,13 @@ def test_Job():
         Get('b'),
     ])
 
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    print(stream.getvalue())
+
+    test1 = yaml.load(stream.getvalue())
+    assert test0 == test1
 
 
 def test_FullThing():
@@ -156,3 +248,60 @@ def test_FullThing():
     merged = FullThing.merge(test0, test1)
 
     print(merged)
+
+
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    print(stream.getvalue())
+
+    test1 = yaml.load(stream.getvalue())
+    assert test0 == test1
+
+
+def test_FullThing_merge():
+
+    loadyaml_a =  dedent("""\
+        !FullThing
+        resource_types: []
+        resources: []
+        jobs: []
+        """)
+
+    print(f'merge yaml from = \n{loadyaml_a}')
+
+    test_a = yaml.load(loadyaml_a)
+
+    print(f'merge read a = {test_a}')
+
+    test_b = yaml.load(dedent("""
+        !FullThing
+        resource_types:
+        - !ResourceType
+          name: a
+          type: a
+          source: {}
+        - !ResourceType
+          name: b
+          type: b
+          source: {}
+        resources: []
+        jobs:
+        - !Job
+          name: a
+          plan: []
+        - !Job
+          name: b
+          plan:
+          - !Get
+            get: myget
+
+    """))
+
+    print(f'merge read b = {test_b}')
+
+    merged = FullThing.merge(test_a, test_b)
+
+    stream= io.StringIO()
+    yaml.dump(merged, stream)
+    print(f'Merged full = {stream.getvalue()}')

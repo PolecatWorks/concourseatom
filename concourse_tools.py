@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from dataclasses import dataclass
 import click
 import io
 import ruamel.yaml
@@ -7,7 +8,6 @@ import ruamel.yaml
 yaml = ruamel.yaml.YAML()
 
 from models import FullThing, Job, Resource, ResourceConfig, ResourceType
-
 
 
 # ------------- CLI commands go below here -------------
