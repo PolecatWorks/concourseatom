@@ -385,11 +385,6 @@ class Job(SetstateInitMixin):
 @dataclass
 class FullThing:
     """Definition of a concourse plan
-
-
-
-    Returns:
-        None: None
     """
 
     resource_types: list[ResourceType] = field(default_factory=list)
@@ -404,13 +399,10 @@ class FullThing:
         It will resolve shared resources and map into a single name.
         It will resolve different resources with same name into discrete resourcess.
 
+        :param aThing: Base concourse plan to add second plan to. This will be unchanged through merge process
+        :param bThing: Secondary plan. This may be modified in naming, but not in function during the merge to achinve minimal :class:`Resource` s and :class:`ResourceType` s.
 
-        Args:
-            aThing (FullThing): Base concourse plan to add second plan to. This will be unchanged through merge process
-            bThing (FullThing): Secondary plan. This may be modified in naming, but not in function during the merge to achinve minimal 'Resource's and resource types.
-
-        Returns:
-            FullThing: Merged output from combination of both inputs with minimised :class:`Resource`s and :class:`ResourceType`s
+        :Return: Merged output from combination of both inputs with minimised :class:`Resource` s and :class:`ResourceType` s
         """
         print(f'My job is merging two jobs:\n  {aThing}\n  {bThing}')
 
