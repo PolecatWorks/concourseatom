@@ -1,3 +1,5 @@
 click
 ruamel.yaml
 pytest
+sphinx
+sphinx-autodoc-typehints

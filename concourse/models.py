@@ -1,3 +1,5 @@
+"""Data models for working with concourse data obejects
+"""
 
 from __future__ import annotations # This enables forward reference of types
 import dataclasses
@@ -9,6 +11,8 @@ from dataclasses import dataclass, field, fields
 
 yaml = YAML()
 
+def get_random_ingredients(kind=None):
+    return ['shells', 'gorgonzola', 'parsley']
 
 class SetstateInitMixin:
     """Inject setstate function to class via a mixin"""
@@ -170,6 +174,13 @@ class Resource(SetstateInitMixin):
 @yaml_object(yaml)
 @dataclass
 class Command(SetstateInitMixin):
+    """Command definition for task
+
+    :param path: Path to executable
+    :param args: args to provide to cmd
+    :param dir: dir from where to run from PWD
+    :param user: User for executing cmd
+    """
     path: str
     args: List[str] = field(default_factory=list)
     dir: Optional[str] = None
@@ -228,6 +239,11 @@ class TaskConfig(SetstateInitMixin):
 @yaml_object(yaml)
 @dataclass
 class Task(SetstateInitMixin):
+    """Concourse Task class
+
+    :param task: Name of the task
+    :type task: str
+    """
     task: str
     config: Optional[TaskConfig] = None
     file: Optional[str] = None
@@ -282,6 +298,15 @@ class In_parallel(SetstateInitMixin):
 @yaml_object(yaml)
 @dataclass
 class LogRetentionPolicy(SetstateInitMixin):
+    """Log Retention for concoure job
+
+    :param days: Number of days to keep logs for
+    :type task: int
+    :param builds: Number of builds to retain
+    :type builds: int
+    :param minimum_succeeded_builds: Minimum number of successful builds to retain
+    :type minimum_succeeded_builds: int
+    """
     days: int
     builds: int
     minimum_succeeded_builds: int
@@ -359,6 +384,13 @@ class Job(SetstateInitMixin):
 @yaml_object(yaml)
 @dataclass
 class FullThing:
+    """Definition of a concourse plan
+
+
+
+    Returns:
+        None: None
+    """
 
     resource_types: list[ResourceType] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
@@ -366,10 +398,19 @@ class FullThing:
 
     @classmethod
     def merge(cls, aThing: FullThing, bThing: FullThing) -> FullThing:
-        """
+        """Merge two Concourse Plans
+
         Merge will take two Things and create a merge of them.
         It will resolve shared resources and map into a single name.
         It will resolve different resources with same name into discrete resourcess.
+
+
+        Args:
+            aThing (FullThing): Base concourse plan to add second plan to. This will be unchanged through merge process
+            bThing (FullThing): Secondary plan. This may be modified in naming, but not in function during the merge to achinve minimal 'Resource's and resource types.
+
+        Returns:
+            FullThing: Merged output from combination of both inputs with minimised :class:`Resource`s and :class:`ResourceType`s
         """
         print(f'My job is merging two jobs:\n  {aThing}\n  {bThing}')
 

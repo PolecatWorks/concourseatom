@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-
+"""CLI tools for working with concourse objects
+"""
 from dataclasses import dataclass
 import click
 import io
@@ -7,7 +8,7 @@ import ruamel.yaml
 
 yaml = ruamel.yaml.YAML()
 
-from models import FullThing, Job, Resource, ResourceConfig, ResourceType
+from concourse.models import FullThing, Job, Resource, ResourceType
 
 
 # ------------- CLI commands go below here -------------
@@ -38,10 +39,8 @@ def merge(srcs):
 
     ben = FullThing(
         resource_types=[ResourceType('name1', 'registry-image',
-            ResourceConfig('suhlig/concourse-rss-resource', 'latest'),
             ),
         ResourceType('name2', 'registry-image',
-            ResourceConfig('suhlig/concourse-rss-resource', 'latest'),
             ),
         ],
         resources=[

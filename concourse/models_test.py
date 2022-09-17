@@ -1,10 +1,11 @@
-
+"""Test functions for Concourse data models
+"""
 
 
 
 import io
 from queue import Full
-from models import FullThing, Get, Job, Put, Resource, ResourceType
+from concourse.models import FullThing, Get, Job, Put, Resource, ResourceType
 import ruamel.yaml
 from textwrap import dedent, indent
 
@@ -193,8 +194,8 @@ def test_Job():
     test0 = Job('a', [])
     assert test0 == Job('a', [])
 
-    assert test0 != Job('ax', [])
-    assert test0 != Job('ax', [])
+    assert test0 == Job('ax', [])
+    assert test0 != Job('ax', [], 'ax')
 
     test0 = Job('a',[
         Put('a'),
@@ -257,6 +258,17 @@ def test_FullThing():
 
     test1 = yaml.load(stream.getvalue())
     assert test0 == test1
+
+
+def test_FullThing_load():
+    loadyaml_a =  dedent("""\
+        !FullThing
+        resource_types: []
+        resources: []
+        jobs: []
+        """)
+
+
 
 
 def test_FullThing_merge():
