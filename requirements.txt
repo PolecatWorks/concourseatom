@@ -4,3 +4,8 @@ sphinx
 sphinx-autodoc-typehints
 pytest
 pytest-sphinx
+black
+flake8
+flake8-black
+pylint
+pre-commit

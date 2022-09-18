@@ -2,10 +2,25 @@
 """
 
 
-
 import io
-from queue import Full
-from concourse.models import Cache, Command, Container_limits, Do, FullThing, Get, In_parallel, Input, Job, LogRetentionPolicy, Output, Put, Resource, ResourceType, Task, TaskConfig
+from concourse.models import (
+    Cache,
+    Command,
+    Container_limits,
+    Do,
+    FullThing,
+    Get,
+    In_parallel,
+    Input,
+    Job,
+    LogRetentionPolicy,
+    Output,
+    Put,
+    Resource,
+    ResourceType,
+    Task,
+    TaskConfig,
+)
 import ruamel.yaml
 from textwrap import dedent
 import pytest
@@ -13,77 +28,72 @@ import pytest
 yaml = ruamel.yaml.YAML()
 
 
-
-
 def test_ResourceType():
-    test0 = ResourceType('a', 'b', {})
-    assert test0 == ResourceType('a', 'b', {})
+    test0 = ResourceType("a", "b", {})
+    assert test0 == ResourceType("a", "b", {})
 
-    assert test0 == ResourceType('ax', 'b', {})
-    assert not test0.exactEq(ResourceType('ax', 'b', {}))
-    assert test0 != ResourceType('a', 'bx', {})
-    assert test0 != ResourceType('a', 'b', {'d': 'e'})
+    assert test0 == ResourceType("ax", "b", {})
+    assert not test0.exactEq(ResourceType("ax", "b", {}))
+    assert test0 != ResourceType("a", "bx", {})
+    assert test0 != ResourceType("a", "b", {"d": "e"})
 
-    assert test0 != ResourceType('a', 'b', {} ,True)
+    assert test0 != ResourceType("a", "b", {}, True)
 
-    resource_types, rewrites = Resource.uniques_and_rewrites([
-        ResourceType('a', 'x', {}),
-        ResourceType('c', 'y', {}),
-    ], [
-        ResourceType('b', 'x', {}),
-        ResourceType('a', 'z', {}),
-    ])
+    resource_types, rewrites = Resource.uniques_and_rewrites(
+        [
+            ResourceType("a", "x", {}),
+            ResourceType("c", "y", {}),
+        ],
+        [
+            ResourceType("b", "x", {}),
+            ResourceType("a", "z", {}),
+        ],
+    )
     assert resource_types == [
-        ResourceType('a', 'x', {}),
-        ResourceType('c', 'y', {}),
-        ResourceType('c', 'z', {}),
+        ResourceType("a", "x", {}),
+        ResourceType("c", "y", {}),
+        ResourceType("c", "z", {}),
     ]
-    assert rewrites == {
-        'b': 'a',
-        'a': 'a-0'
-    }
+    assert rewrites == {"b": "a", "a": "a-0"}
 
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(test0, stream)
 
     print(stream.getvalue())
 
     test1 = yaml.load(stream.getvalue())
     assert test0 == test1
-
-
 
 
 def test_Resource():
-    test0 = Resource('a', 'b', {})
-    assert test0 == Resource('a', 'b', {})
+    test0 = Resource("a", "b", {})
+    assert test0 == Resource("a", "b", {})
 
-    assert test0 == Resource('ax', 'b', {})
-    assert not test0.exactEq(Resource('ax', 'b', {}))
+    assert test0 == Resource("ax", "b", {})
+    assert not test0.exactEq(Resource("ax", "b", {}))
 
-    assert test0 != Resource('a', 'bx', {})
-    assert test0 != Resource('a', 'b', {"c": "d"})
-    assert test0 != Resource('a', 'b', {}, 'x')
+    assert test0 != Resource("a", "bx", {})
+    assert test0 != Resource("a", "b", {"c": "d"})
+    assert test0 != Resource("a", "b", {}, "x")
 
-    resources, rewrites = Resource.uniques_and_rewrites([
-        Resource('a', 'x', {}),
-        Resource('c', 'y', {}),
-    ], [
-        Resource('b', 'x', {}),
-        Resource('a', 'z', {}),
-    ])
+    resources, rewrites = Resource.uniques_and_rewrites(
+        [
+            Resource("a", "x", {}),
+            Resource("c", "y", {}),
+        ],
+        [
+            Resource("b", "x", {}),
+            Resource("a", "z", {}),
+        ],
+    )
     assert resources == [
-        Resource('a', 'x', {}),
-        Resource('c', 'y', {}),
-        Resource('c', 'z', {}),
+        Resource("a", "x", {}),
+        Resource("c", "y", {}),
+        Resource("c", "z", {}),
     ]
-    assert rewrites == {
-        'b': 'a',
-        'a': 'a-0'
-    }
+    assert rewrites == {"b": "a", "a": "a-0"}
 
-
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(test0, stream)
 
     print(stream.getvalue())
@@ -92,12 +102,12 @@ def test_Resource():
     assert test0 == test1
 
 
-
-
-
-@pytest.mark.parametrize("myClass, myYaml", [
-    (ResourceType,
-    """ !ResourceType
+@pytest.mark.parametrize(
+    "myClass, myYaml",
+    [
+        (
+            ResourceType,
+            """ !ResourceType
         name: a
         type: b
         source:
@@ -112,9 +122,11 @@ def test_Resource():
         defaults:
           acc: rby
           add: fhfh
-    """),
-    (Resource,
-    """ !Resource
+    """,
+        ),
+        (
+            Resource,
+            """ !Resource
         name: a
         type: b
         source:
@@ -130,37 +142,49 @@ def test_Resource():
         - def
         public: True
         webhook_token: abcd
-    """),
-    (Command,
-    """ !Command
+    """,
+        ),
+        (
+            Command,
+            """ !Command
         path: r
         args:
             - s
         dir: t
         user: v
-    """),
-    (Input,
-    """ !Input
+    """,
+        ),
+        (
+            Input,
+            """ !Input
         name: a
         path: b
         optional: True
-    """),
-    (Output,
-    """ !Output
+    """,
+        ),
+        (
+            Output,
+            """ !Output
         name: 1
         path: b
-    """),
-    (Cache,
-    """ !Cache
+    """,
+        ),
+        (
+            Cache,
+            """ !Cache
         path: b
-    """),
-    (Container_limits,
-    """ !Container_limits
+    """,
+        ),
+        (
+            Container_limits,
+            """ !Container_limits
         cpu: 1
         memory: 2
-    """),
-    (TaskConfig,
-    """ !TaskConfig
+    """,
+        ),
+        (
+            TaskConfig,
+            """ !TaskConfig
         platform: a
         image_resource:
           b: c
@@ -180,9 +204,11 @@ def test_Resource():
           !Container_limits
           cpu: 1
           memory: 2
-    """),
-    (Task,
-    """ !Task
+    """,
+        ),
+        (
+            Task,
+            """ !Task
         task: a
         config:
           !TaskConfig
@@ -206,9 +232,11 @@ def test_Resource():
           k: l
         output_mapping:
           m: n
-    """),
-    (Get,
-    """ !Get
+    """,
+        ),
+        (
+            Get,
+            """ !Get
         get: a
         resource:
           b: c
@@ -218,9 +246,11 @@ def test_Resource():
           e: f
         trigger: True
         version: g
-    """),
-    (Put,
-    """ !Put
+    """,
+        ),
+        (
+            Put,
+            """ !Put
         put: a
         resource: b
         inputs: c
@@ -228,29 +258,37 @@ def test_Resource():
           d: e
         get_params:
           f: g
-    """),
-    (Do,
-    """ !Do
+    """,
+        ),
+        (
+            Do,
+            """ !Do
         do:
         - !Get
           get: a
-    """),
-    (In_parallel,
-    """ !In_parallel
+    """,
+        ),
+        (
+            In_parallel,
+            """ !In_parallel
         steps:
         - !Get
           get: a
         limit: 1
         fail_fast: True
-    """),
-    (LogRetentionPolicy,
-    """ !LogRetentionPolicy
+    """,
+        ),
+        (
+            LogRetentionPolicy,
+            """ !LogRetentionPolicy
         days: 1
         builds: 2
         minimum_succeeded_builds: 3
-    """),
-    (Job,
-    """ !Job
+    """,
+        ),
+        (
+            Job,
+            """ !Job
         name: a
         plan:
         - !Get
@@ -268,18 +306,19 @@ def test_Resource():
         public: True
         disable_manual_trigger: True
         interruptible: True
-    """),
-
-    ])
+    """,
+        ),
+    ],
+)
 def test_read_classes(myClass, myYaml):
     loadyaml_a = dedent(myYaml)
-    print(f'Loading from yaml {loadyaml_a}')
+    print(f"Loading from yaml {loadyaml_a}")
     test0 = yaml.load(loadyaml_a)
-    print(f'Read as {test0}')
+    print(f"Read as {test0}")
 
     assert isinstance(test0, myClass)
 
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(test0, stream)
 
     print(stream.getvalue())
@@ -288,21 +327,22 @@ def test_read_classes(myClass, myYaml):
     assert test0 == test1
 
 
-
-
 def test_Job():
-    test0 = Job('a', [])
-    assert test0 == Job('a', [])
+    test0 = Job("a", [])
+    assert test0 == Job("a", [])
 
-    assert test0 == Job('ax', [])
-    assert test0 != Job('ax', [], 'ax')
+    assert test0 == Job("ax", [])
+    assert test0 != Job("ax", [], "ax")
 
-    test0 = Job('a',[
-        Put('a'),
-        Get('b'),
-    ])
+    test0 = Job(
+        "a",
+        [
+            Put("a"),
+            Get("b"),
+        ],
+    )
 
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(test0, stream)
 
     print(stream.getvalue())
@@ -314,44 +354,41 @@ def test_Job():
 def test_FullThing():
     test0 = FullThing(
         resource_types=[
-            ResourceType('a', 'x', {}),
+            ResourceType("a", "x", {}),
         ],
         resources=[
-            Resource('b', 'a', {}),
+            Resource("b", "a", {}),
         ],
-        jobs=[]
-        )
+        jobs=[],
+    )
 
     assert test0 == FullThing(
         resource_types=[
-            ResourceType('a', 'x', {}),
+            ResourceType("a", "x", {}),
         ],
         resources=[
-            Resource('b', 'a', {}),
+            Resource("b", "a", {}),
         ],
-        jobs=[]
-        )
-
-
+        jobs=[],
+    )
 
     test1 = FullThing(
         resource_types=[
-            ResourceType('b', 'x', {}),
-            ResourceType('c', 'y', {}),
+            ResourceType("b", "x", {}),
+            ResourceType("c", "y", {}),
         ],
         resources=[
-            Resource('a', 'b', {}),
-            Resource('ax', 'c', {}),
+            Resource("a", "b", {}),
+            Resource("ax", "c", {}),
         ],
-        jobs=[]
-        )
+        jobs=[],
+    )
 
     merged = FullThing.merge(test0, test1)
 
     print(merged)
 
-
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(test0, stream)
 
     print(stream.getvalue())
@@ -361,7 +398,8 @@ def test_FullThing():
 
 
 def test_FullThing_load():
-    loadyaml_a =  dedent("""\
+    loadyaml_a = dedent(
+        """\
         !FullThing
         resource_types:
         - !ResourceType
@@ -459,29 +497,33 @@ def test_FullThing_load():
           old_name: m1
           serial: True
 
-        """)
-    print(f'Loaded job is {loadyaml_a}')
+        """
+    )
+    print(f"Loaded job is {loadyaml_a}")
     test_a = yaml.load(loadyaml_a)
-    print(f'Read as {test_a}')
-
+    print(f"Read as {test_a}")
 
 
 def test_FullThing_merge():
 
-    loadyaml_a =  dedent("""\
+    loadyaml_a = dedent(
+        """\
         !FullThing
         resource_types: []
         resources: []
         jobs: []
-        """)
+        """
+    )
 
-    print(f'merge yaml from = \n{loadyaml_a}')
+    print(f"merge yaml from = \n{loadyaml_a}")
 
     test_a = yaml.load(loadyaml_a)
 
-    print(f'merge read a = {test_a}')
+    print(f"merge read a = {test_a}")
 
-    test_b = yaml.load(dedent("""
+    test_b = yaml.load(
+        dedent(
+            """
         !FullThing
         resource_types:
         - !ResourceType
@@ -503,12 +545,14 @@ def test_FullThing_merge():
           - !Get
             get: myget
 
-    """))
+    """
+        )
+    )
 
-    print(f'merge read b = {test_b}')
+    print(f"merge read b = {test_b}")
 
     merged = FullThing.merge(test_a, test_b)
 
-    stream= io.StringIO()
+    stream = io.StringIO()
     yaml.dump(merged, stream)
-    print(f'Merged full = {stream.getvalue()}')
+    print(f"Merged full = {stream.getvalue()}")

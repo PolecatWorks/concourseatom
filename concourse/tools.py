@@ -1,20 +1,19 @@
 #!/usr/bin/env python
 """CLI tools for working with concourse objects
 """
-from dataclasses import dataclass
-import click
 import io
+import click
 import ruamel.yaml
+from concourse.models import FullThing, Job, Resource, ResourceType
 
 yaml = ruamel.yaml.YAML()
-
-from concourse.models import FullThing, Job, Resource, ResourceType
 
 
 # ------------- CLI commands go below here -------------
 
+
 @click.group()
-@click.option('--debug/--no-debug', default=False)
+@click.option("--debug/--no-debug", default=False)
 def cli(debug):
     """
     Simple concourse manaagement functions
@@ -23,45 +22,40 @@ def cli(debug):
         click.echo(f"Debug mode is {'on' if debug else 'off'}")
 
 
-
-
-
-
 @cli.command()
-@click.argument('srcs', nargs=-1)
+@click.argument("srcs", nargs=-1)
 def merge(srcs):
     """
     Merge concourse jobs
     """
-    click.echo(f'Starting to merge {srcs}')
+    click.echo(f"Starting to merge {srcs}")
 
-    f= io.StringIO()
+    f = io.StringIO()
 
     ben = FullThing(
-        resource_types=[ResourceType('name1', 'registry-image',
+        resource_types=[
+            ResourceType(
+                "name1",
+                "registry-image",
             ),
-        ResourceType('name2', 'registry-image',
+            ResourceType(
+                "name2",
+                "registry-image",
             ),
         ],
         resources=[
-            Resource('d','d', {'blah': 'bahbab'}),
+            Resource("d", "d", {"blah": "bahbab"}),
         ],
-        jobs=[
-            Job('f', [])
-        ]
+        jobs=[Job("f", [])],
     )
 
     yaml.dump(ben, f)
 
-
     click.echo(f.getvalue())
-    click.echo(f'done')
+    click.echo("done")
 
     f.close()
 
 
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

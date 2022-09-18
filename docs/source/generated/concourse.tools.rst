@@ -1,23 +1,4 @@
-﻿concourse.tools
+concourse.tools
 ===============
 
 .. automodule:: concourse.tools
-
-   
-   
-   
-
-   
-   
-   
-
-   
-   
-   
-
-   
-   
-   
-
-
-

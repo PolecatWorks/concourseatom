@@ -3,6 +3,9 @@
 PYTHON := venv/bin/python
 PIP := venv/bin/pip
 PYTEST := venv/bin/pytest
+FLAKE8 := venv/bin/flake8
+BLACK  := venv/bin/black
+PYLINT := venv/bin/pylint
 
 .PHONY: docs
 
@@ -27,3 +30,15 @@ docs-watch:
 
 doctest:
 	cd docs && make doctest
+
+flake8:
+	$(FLAKE8) .
+
+pylint:
+	$(PYLINT) .
+
+format:
+	$(BLACK) .
+
+pre-commit:
+	pre-commit run --all-files
