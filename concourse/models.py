@@ -12,6 +12,14 @@ from dataclasses import dataclass, field, fields
 yaml = YAML()
 
 def get_random_ingredients(kind=None):
+    """
+    >>> 1+1
+    2
+    >>> 1/0 # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+      ...
+    ZeroDivisionError: integer division or modulo by zero
+    """
     return ['shells', 'gorgonzola', 'parsley']
 
 
