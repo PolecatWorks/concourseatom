@@ -132,7 +132,7 @@ def test_Resource():
         webhook_token: abcd
     """),
     (Command,
-    """!Command
+    """ !Command
         path: r
         args:
             - s
@@ -146,7 +146,7 @@ def test_Resource():
         optional: True
     """),
     (Output,
-    """!Output
+    """ !Output
         name: 1
         path: b
     """),
