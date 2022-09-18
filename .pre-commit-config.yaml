@@ -9,6 +9,7 @@ repos:
     -   id: check-yaml
     -   id: check-added-large-files
     -   id: no-commit-to-branch
+        args: ['--branch', 'main']
 -   repo: https://github.com/pycqa/flake8
     rev: '5.0.4'  # pick a git hash / tag to point to
     hooks:
