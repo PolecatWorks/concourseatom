@@ -195,6 +195,7 @@ class Command(SetstateInitMixin):
     dir: Optional[str] = None
     user: Optional[str] = None
 
+
 @yaml_object(yaml)
 @dataclass
 class Input(SetstateInitMixin):
@@ -205,6 +206,7 @@ class Input(SetstateInitMixin):
     def __post_init__(self):
         if not self.path:
             self.path = self.name
+
 
 @yaml_object(yaml)
 @dataclass
@@ -234,8 +236,8 @@ class Container_limits(SetstateInitMixin):
 @dataclass
 class TaskConfig(SetstateInitMixin):
     platform: str
-    image_resource: Any
     run: Command
+    image_resource: Optional[Resource] = None
     inputs: List[Input] = field(default_factory=list)
     outputs: List[Output] = field(default_factory=list)
     caches: List[Cache] = field(default_factory=list)
@@ -295,13 +297,21 @@ class Put(SetstateInitMixin):
             self.resource = self.put
 
 
+@yaml_object(yaml)
+@dataclass
+class Do(SetstateInitMixin):
+    do: List[Step]
+
 
 @yaml_object(yaml)
 @dataclass
 class In_parallel(SetstateInitMixin):
-    steps: List[Union[Get, Put, Task]] = field(default_factory=list)
+    steps: List[Step] = field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
+
+
+Step = Union[Get, Put, Task, In_parallel, Do]
 
 
 @yaml_object(yaml)
@@ -340,11 +350,11 @@ class Job(SetstateInitMixin):
     public: bool = False
     disable_manual_trigger: bool = False
     interruptible: bool = False
-    # on_success: Optional[Step] = None
-    # on_failure: Optional[Step] = None
-    # on_error: Optional[Step] = None
-    # on_abort: Optional[Step] = None
-    # ensure: Optional[Step] = None
+    on_success: Optional[Step] = None
+    on_failure: Optional[Step] = None
+    on_error: Optional[Step] = None
+    on_abort: Optional[Step] = None
+    ensure: Optional[Step] = None
 
     def __eq__(self, other: Job) -> bool:
         return self.plan == other.plan and self.old_name == other.old_name and self.serial == other.serial \

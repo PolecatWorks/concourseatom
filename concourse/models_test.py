@@ -5,43 +5,12 @@
 
 import io
 from queue import Full
-from concourse.models import FullThing, Get, Job, Put, Resource, ResourceType
+from concourse.models import Cache, Command, Container_limits, Do, FullThing, Get, In_parallel, Input, Job, LogRetentionPolicy, Output, Put, Resource, ResourceType, Task, TaskConfig
 import ruamel.yaml
-from textwrap import dedent, indent
+from textwrap import dedent
+import pytest
 
 yaml = ruamel.yaml.YAML()
-
-
-# def test_ResourceConfig():
-#     test0 = ResourceConfig('a', 'b')
-#     assert test0 == ResourceConfig('a', 'b')
-
-#     assert test0 != ResourceConfig('ax', 'b')
-#     assert test0 != ResourceConfig('a', 'bx')
-#     assert test0 != ResourceConfig('ax', 'bx')
-
-#     stream= io.StringIO()
-#     yaml.dump(test0, stream)
-
-#     test1 = yaml.load(stream.getvalue())
-#     print(test1)
-#     assert test0 == test1
-
-#     # assert stream.getvalue() == dedent("""\
-#     #     !ResourceConfig
-#     #     repository: a
-#     #     tag: b
-#     #     """)
-
-
-#     # print(stream.getvalue())
-
-#     # data = yaml.load(dedent("""\
-#     #     !ResourceConfig
-#     #     repository: a
-#     #     tag: b
-#     #     """))
-#     # print(data)
 
 
 
@@ -82,36 +51,6 @@ def test_ResourceType():
     test1 = yaml.load(stream.getvalue())
     assert test0 == test1
 
-
-    test2 = yaml.load(dedent("""
-        !ResourceType
-        name: a
-        type: b
-        source: {}
-    """))
-    print(f'test2 = {test2}')
-
-    assert test0 == test2
-
-    test3 = yaml.load(dedent("""
-        !ResourceType
-        name: a
-        type: b
-        source:
-          abc: def
-        privileged: True
-        params:
-          abb: ddd
-        check_every: 10m
-        tags:
-        - abc
-        - def
-        defaults:
-          acc: rby
-          add: fhfh
-    """))
-
-    print(f'test3 = {test3}')
 
 
 
@@ -154,18 +93,28 @@ def test_Resource():
 
 
 
-    test2 = yaml.load(dedent("""
-        !Resource
+
+
+@pytest.mark.parametrize("myClass, myYaml", [
+    (ResourceType,
+    """ !ResourceType
         name: a
         type: b
-        source: {}
-    """))
-    print(f'test2 = {test2}')
-
-    assert test0 == test2
-
-    test3 = yaml.load(dedent("""
-        !Resource
+        source:
+          abc: def
+        privileged: True
+        params:
+          abb: ddd
+        check_every: 10m
+        tags:
+        - abc
+        - def
+        defaults:
+          acc: rby
+          add: fhfh
+    """),
+    (Resource,
+    """ !Resource
         name: a
         type: b
         source:
@@ -181,11 +130,162 @@ def test_Resource():
         - def
         public: True
         webhook_token: abcd
-    """))
+    """),
+    (Command,
+    """!Command
+        path: r
+        args:
+            - s
+        dir: t
+        user: v
+    """),
+    (Input,
+    """ !Input
+        name: a
+        path: b
+        optional: True
+    """),
+    (Output,
+    """!Output
+        name: 1
+        path: b
+    """),
+    (Cache,
+    """ !Cache
+        path: b
+    """),
+    (Container_limits,
+    """ !Container_limits
+        cpu: 1
+        memory: 2
+    """),
+    (TaskConfig,
+    """ !TaskConfig
+        platform: a
+        image_resource:
+          b: c
+        run:
+          !Command
+          path: d
+        inputs:
+        - e
+        outputs:
+        - f
+        caches:
+        - g
+        params:
+          h: i
+        rootfs_uri: j
+        container_limits:
+          !Container_limits
+          cpu: 1
+          memory: 2
+    """),
+    (Task,
+    """ !Task
+        task: a
+        config:
+          !TaskConfig
+          platform: str
+          image_resource:
+            b: c
+          run:
+            path: d
+        file: e
+        image: f
+        priviledged: True
+        vars:
+          g: h
+        container_limits:
+          !Container_limits
+          cpu: 1
+          memory: 2
+        params:
+          i: j
+        input_mapping:
+          k: l
+        output_mapping:
+          m: n
+    """),
+    (Get,
+    """ !Get
+        get: a
+        resource:
+          b: c
+        passed:
+        - d
+        params:
+          e: f
+        trigger: True
+        version: g
+    """),
+    (Put,
+    """ !Put
+        put: a
+        resource: b
+        inputs: c
+        params:
+          d: e
+        get_params:
+          f: g
+    """),
+    (Do,
+    """ !Do
+        do:
+        - !Get
+          get: a
+    """),
+    (In_parallel,
+    """ !In_parallel
+        steps:
+        - !Get
+          get: a
+        limit: 1
+        fail_fast: True
+    """),
+    (LogRetentionPolicy,
+    """ !LogRetentionPolicy
+        days: 1
+        builds: 2
+        minimum_succeeded_builds: 3
+    """),
+    (Job,
+    """ !Job
+        name: a
+        plan:
+        - !Get
+          get: b
+        old_name: b
+        serial: True
+        serial_groups:
+        - c
+        max_in_flight: 1
+        build_log_retention:
+          !LogRetentionPolicy
+          days: 1
+          builds: 2
+          minimum_succeeded_builds: 3
+        public: True
+        disable_manual_trigger: True
+        interruptible: True
+    """),
 
-    print(f'test3 = {test3}')
+    ])
+def test_read_classes(myClass, myYaml):
+    loadyaml_a = dedent(myYaml)
+    print(f'Loading from yaml {loadyaml_a}')
+    test0 = yaml.load(loadyaml_a)
+    print(f'Read as {test0}')
 
+    assert isinstance(test0, myClass)
 
+    stream= io.StringIO()
+    yaml.dump(test0, stream)
+
+    print(stream.getvalue())
+
+    test1 = yaml.load(stream.getvalue())
+    assert test0 == test1
 
 
 
@@ -263,11 +363,106 @@ def test_FullThing():
 def test_FullThing_load():
     loadyaml_a =  dedent("""\
         !FullThing
-        resource_types: []
-        resources: []
-        jobs: []
-        """)
+        resource_types:
+        - !ResourceType
+          name: a
+          type: b
+          source:
+            c: d
+          privileged: True
+          params:
+            e: f
+          check_every: 10m
+          tags:
+            g: h
+          defaults:
+            i: j
+        resources:
+        - !Resource
+          name: a
+          type: b
+          source:
+            c: d
+          old_name: e
+          ico: f
+          version: g
+          check_every: 10m
+          check_timeout: 2h
+          expose_build_created_by: True
+          tags:
+            h: i
+          public: True
+          webhook_token: j
+        jobs:
+        - !Job
+          name: a
+          plan:
+          - !Get
+            get: b
+            resource: c
+            passed:
+            - d
+            params:
+              e: f
+            trigger: True
+            version: "1"
+          - !Put
+            put: g
+            resource: h
+            inputs: i
+            params:
+              j: k
+            get_params:
+              l: m
+          - !Task
+            task: n
+            config:
+              !TaskConfig
+              platform: o
+              image_resource:
+                p: q
+              run:
+                !Command
+                path: r
+                args:
+                  - s
+                dir: t
+                user: v
+              inputs:
+              - w
+              outputs:
+              - x
+              caches:
+              - y
+              params:
+              - z
+              rootfs_uri: a1
+              container_limits:
+                !Container_limits
+                cpu: 1
+                memory: 2
+            file: b1
+            image: c1
+            priviledged: True
+            vars:
+              d1: e1
+            container_limits:
+              !Container_limits
+              cpu: 3
+              memory: 4
+            params:
+              f1: g1
+            input_mapping:
+              h1: j1
+            output_mapping:
+              k1: l1
+          old_name: m1
+          serial: True
 
+        """)
+    print(f'Loaded job is {loadyaml_a}')
+    test_a = yaml.load(loadyaml_a)
+    print(f'Read as {test_a}')
 
 
 
