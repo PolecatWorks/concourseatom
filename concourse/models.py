@@ -14,11 +14,12 @@ yaml = YAML()
 def get_random_ingredients(kind=None):
     return ['shells', 'gorgonzola', 'parsley']
 
+
+
 class SetstateInitMixin:
     """Inject setstate function to class via a mixin"""
     def __setstate__(self, state):
         """Call init here so that yaml.load correctly initialises the objects. This can be a performance penalty"""
-        # self.__dict__.update(state)
         self.__init__(**state)
 
 
