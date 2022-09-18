@@ -7,9 +7,3 @@ Define the data models
    :members:
    :undoc-members:
    :show-inheritance:
-
-
-exp
----
-.. todo::
-    Add some more todos here
