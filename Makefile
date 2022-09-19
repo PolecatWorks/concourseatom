@@ -7,6 +7,10 @@ FLAKE8 := venv/bin/flake8
 BLACK  := venv/bin/black
 PYLINT := venv/bin/pylint
 
+
+PYTEST_ARGS=-rP --pdb
+
+
 .PHONY: docs
 
 
@@ -19,8 +23,11 @@ venv:
 	$(PIP) install -r requirements.txt
 
 test:
-	$(PYTEST) -rP --pdb -k FullThing_merge
+	$(PYTEST) ${PYTEST_ARGS}
 	# -k Resource
+
+coverage: export PYTEST_ARGS=--cov-report xml:cov.xml
+coverage: test
 
 docs:
 	cd docs && make html
