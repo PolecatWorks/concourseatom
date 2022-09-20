@@ -19,6 +19,7 @@ concourse.models\_test
       test_Job
       test_Resource
       test_ResourceType
+      test_read_classes
    
    
 

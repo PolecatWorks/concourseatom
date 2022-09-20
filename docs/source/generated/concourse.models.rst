@@ -26,6 +26,7 @@ concourse.models
       Cache
       Command
       Container_limits
+      Do
       FullThing
       Get
       In_parallel
