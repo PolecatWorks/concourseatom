@@ -682,7 +682,7 @@ def test_Pipeline_load():
             """,
         ),
         (
-            # Minimal Associative
+            # Minimal merge to flatten resource_type and resource
             """
             !Pipeline
             resource_types:
@@ -720,6 +720,56 @@ def test_Pipeline_load():
               name: c
               type: a
               source: {}
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal merge to flattening resource_type keeping resource
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source:
+                e: f
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: d
+              type: a
+              source:
+                e: g
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source:
+                e: f
+            - !Resource
+              name: d
+              type: a
+              source:
+                e: g
             jobs: []
             """,
         ),

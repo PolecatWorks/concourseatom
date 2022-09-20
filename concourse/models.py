@@ -412,10 +412,10 @@ class Pipeline:
         """Check if the Pipeline is valid
 
         Rules:
-        * Check that all resource types referred to from resources are defined
 
-        Returns:
-            bool: all rules are passed
+        - Check that all resource types referred to from resources are defined
+
+        :return: all rules are passed
         """
         resource_type_names = [rt.name for rt in self.resource_types]
 
