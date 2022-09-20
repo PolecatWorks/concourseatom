@@ -401,15 +401,30 @@ class Job(SetstateInitMixin):
 
 @yaml_object(yaml)
 @dataclass
-class FullThing:
+class Pipeline:
     """Definition of a concourse plan"""
 
     resource_types: list[ResourceType] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
     jobs: List[Job] = field(default_factory=list)
 
+    def validate(self) -> bool:
+        """Check if the Pipeline is valid
+
+        Rules:
+        * Check that all resource types referred to from resources are defined
+
+        Returns:
+            bool: all rules are passed
+        """
+        resource_type_names = [rt.name for rt in self.resource_types]
+
+        return all(
+            (resource.type in resource_type_names) for resource in self.resources
+        )
+
     @classmethod
-    def merge(cls, aThing: FullThing, bThing: FullThing) -> FullThing:
+    def merge(cls, pipeline_left: Pipeline, pipeline_right: Pipeline) -> Pipeline:
         """Merge two Concourse Plans
 
         Merge will take two Things and create a merge of them.
@@ -426,30 +441,36 @@ class FullThing:
             Merged output from combination of both inputs with minimised
             :class:`Resource` s and :class:`ResourceType` s
         """
-        print(f"My job is merging two jobs:\n  {aThing}\n  {bThing}")
+        print(f"My job is merging two jobs:\n  {pipeline_left}\n  {pipeline_right}")
 
         # resource_types_input = aThing.resource_types + bThing.resource_types
 
+        if not pipeline_left.validate():
+            raise Exception(f"pipeline_left is not valid: {pipeline_left}")
+
+        if not pipeline_right.validate():
+            raise Exception(f"pipeline_right is not valid: {pipeline_right}")
+
         resource_types, resource_types_rewrites = ResourceType.uniques_and_rewrites(
-            aThing.resource_types, bThing.resource_types
+            pipeline_left.resource_types, pipeline_right.resource_types
         )
 
         print(f"RT = {resource_types}")
         print(f"RT rewrites = {resource_types_rewrites}")
 
         bThing_resource_renames = Resource.rewrite(
-            bThing.resources, resource_types_rewrites
+            pipeline_right.resources, resource_types_rewrites
         )
 
         resources, resource_rewrites = Resource.uniques_and_rewrites(
-            aThing.resources, bThing_resource_renames
+            pipeline_left.resources, bThing_resource_renames
         )
         print(f"R = {resources}")
         print(f"R rewrites = {resource_rewrites}")
 
-        bThing_jobs = Job.rewrite(bThing.jobs, resource_rewrites)
+        bThing_jobs = Job.rewrite(pipeline_right.jobs, resource_rewrites)
 
-        jobs, job_rewrites = Job.uniques_and_rewrites(aThing.jobs, bThing_jobs)
+        jobs, job_rewrites = Job.uniques_and_rewrites(pipeline_left.jobs, bThing_jobs)
 
         # noqa: E501 # For the jobs. Need to recurse through the obejcts to apply rewrites to them based on resource rewrites.
         # noqa: E501 #This will result in the correctly nameed/mapped resources in teh bThing to match the merged resources.
@@ -457,4 +478,4 @@ class FullThing:
         # noqa: E501 #    1. Dont merge just keep them together (side by side). (should be simple viable optoin)
         # noqa: E501 #    2. Work out where they share name and share parts of pipeline then merge those.    (MAYBE not a good idea)
 
-        return FullThing(resource_types=resource_types, resources=resources, jobs=jobs)
+        return Pipeline(resource_types=resource_types, resources=resources, jobs=jobs)

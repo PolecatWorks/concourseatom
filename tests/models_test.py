@@ -8,7 +8,7 @@ from concourse.models import (
     Command,
     Container_limits,
     Do,
-    FullThing,
+    Pipeline,
     Get,
     In_parallel,
     Input,
@@ -351,8 +351,8 @@ def test_Job():
     assert test0 == test1
 
 
-def test_FullThing():
-    test0 = FullThing(
+def test_Pipeline():
+    test0 = Pipeline(
         resource_types=[
             ResourceType("a", "x", {}),
         ],
@@ -362,7 +362,7 @@ def test_FullThing():
         jobs=[],
     )
 
-    assert test0 == FullThing(
+    assert test0 == Pipeline(
         resource_types=[
             ResourceType("a", "x", {}),
         ],
@@ -372,7 +372,7 @@ def test_FullThing():
         jobs=[],
     )
 
-    test1 = FullThing(
+    test1 = Pipeline(
         resource_types=[
             ResourceType("b", "x", {}),
             ResourceType("c", "y", {}),
@@ -384,7 +384,7 @@ def test_FullThing():
         jobs=[],
     )
 
-    merged = FullThing.merge(test0, test1)
+    merged = Pipeline.merge(test0, test1)
 
     print(merged)
 
@@ -397,10 +397,66 @@ def test_FullThing():
     assert test0 == test1
 
 
-def test_FullThing_load():
+@pytest.mark.parametrize(
+    "myYaml",
+    [
+        (
+            """
+      jobs:
+      - name: job
+        public: true
+        plan:
+        - task: simple-task
+          config:
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: busybox }
+            run:
+              path: echo
+              args: ["Hello world!"]
+      """
+        ),
+        (
+            """
+      resources:
+      - name: concourse-docs-git
+        type: git
+        icon: github
+        source:
+          uri: https://github.com/concourse/docs
+
+      jobs:
+      - name: job
+        public: true
+        plan:
+        - get: concourse-docs-git
+          trigger: true
+        - task: list-files
+          config:
+            inputs:
+              - name: concourse-docs-git
+            platform: linux
+            image_resource:
+              type: registry-image
+              source: { repository: busybox }
+            run:
+              path: ls
+              args: ["-la", "./concourse-docs-git"]
+      """
+        ),
+    ],
+)
+def test_jobSampleLoad(myYaml):
+    print(f"Loaded job is {myYaml}")
+    test_a = yaml.load(myYaml)
+    print(f"Read as {test_a}")
+
+
+def test_Pipeline_load():
     loadyaml_a = dedent(
         """\
-        !FullThing
+        !Pipeline
         resource_types:
         - !ResourceType
           name: a
@@ -504,12 +560,191 @@ def test_FullThing_load():
     print(f"Read as {test_a}")
 
 
-def test_FullThing_merge():
+@pytest.mark.parametrize(
+    "yamlLeft, yamlRight, yamlMerged",
+    [
+        (
+            # Empty Pipeline
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal Pipeline
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources: []
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal Associative
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal Associative - reversed
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal Associative
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: d
+              type: a
+              source: {}
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source: {}
+            jobs: []
+            """,
+        ),
+    ],
+)
+def test_merge(yamlLeft, yamlRight, yamlMerged):
+    obj_left = yaml.load(dedent(yamlLeft))
+    obj_right = yaml.load(dedent(yamlRight))
+    obj_merged = yaml.load(dedent(yamlMerged))
+
+    merged = Pipeline.merge(obj_left, obj_right)
+
+    assert obj_merged == merged
+
+
+def test_Pipeline_merge():
 
     loadyaml_a = dedent(
         """\
-        !FullThing
-        resource_types: []
+        !Pipeline
+        resource_types:
+        - !ResourceType
+          name: a
+          type: a
+          source: {}
         resources: []
         jobs: []
         """
@@ -524,7 +759,7 @@ def test_FullThing_merge():
     test_b = yaml.load(
         dedent(
             """
-        !FullThing
+        !Pipeline
         resource_types:
         - !ResourceType
           name: a
@@ -544,15 +779,43 @@ def test_FullThing_merge():
           plan:
           - !Get
             get: myget
-
     """
         )
     )
 
     print(f"merge read b = {test_b}")
 
-    merged = FullThing.merge(test_a, test_b)
+    merged = Pipeline.merge(test_a, test_b)
 
     stream = io.StringIO()
     yaml.dump(merged, stream)
     print(f"Merged full = {stream.getvalue()}")
+
+    manual_merged = yaml.load(
+        dedent(
+            """
+        !Pipeline
+        resource_types:
+        - !ResourceType
+          name: a
+          type: a
+          source: {}
+        - !ResourceType
+          name: b
+          type: b
+          source: {}
+        resources: []
+        jobs:
+        - !Job
+          name: a
+          plan: []
+        - !Job
+          name: b
+          plan:
+          - !Get
+            get: myget
+      """
+        )
+    )
+
+    assert merged == manual_merged

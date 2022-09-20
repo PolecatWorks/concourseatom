@@ -28,6 +28,5 @@
    :recursive:
 
    concourse.models
-   concourse.models_test
    concourse.tools
 

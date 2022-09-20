@@ -4,7 +4,7 @@
 import io
 import click
 import ruamel.yaml
-from concourse.models import FullThing, Job, Resource, ResourceType
+from concourse.models import Pipeline, Job, Resource, ResourceType
 
 yaml = ruamel.yaml.YAML()
 
@@ -32,7 +32,7 @@ def merge(srcs):
 
     f = io.StringIO()
 
-    ben = FullThing(
+    ben = Pipeline(
         resource_types=[
             ResourceType(
                 "name1",
