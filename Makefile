@@ -6,6 +6,7 @@ PYTEST := venv/bin/pytest
 FLAKE8 := venv/bin/flake8
 BLACK  := venv/bin/black
 PYLINT := venv/bin/pylint
+DETECT_SECRETS := venv/bin/detect-secrets
 
 
 PYTEST_ARGS=-rP --pdb
@@ -49,3 +50,6 @@ format:
 
 pre-commit:
 	pre-commit run --all-files
+
+secrets-baseline:
+	$(DETECT_SECRETS) scan > .secrets.baseline
