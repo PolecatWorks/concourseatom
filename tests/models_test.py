@@ -1,8 +1,10 @@
 """Test functions for Concourse data models
 """
+from contextlib import nullcontext as does_not_raise
 
 
 import io
+from typing import Any, Dict
 from concourse.models import (
     Cache,
     Command,
@@ -102,49 +104,25 @@ def test_Resource():
     assert test0 == test1
 
 
-def test_Get():
-    test0 = Get("a")
-
-    test1 = test0.rewrite({})
-
-    assert test0 == test1
-
-
-def test_Put():
-    test0 = Put("a")
-
-    test1 = test0.rewrite({})
-
-    assert test0 == test1
-
-
-def test_Do():
-    test0 = Do([])
-
-    test1 = test0.rewrite({})
-
-    assert test0 == test1
-
-
-def test_In_parallel():
-    test0 = In_parallel([])
-
-    test1 = test0.rewrite({})
-
-    assert test0 == test1
-
-
-def test_Task():
-    test0 = Task("a")
-
-    with pytest.raises(Exception):
-        test1 = test0.rewrite({})
-
-    test0 = Task("a", TaskConfig("linux", "sh"))
-
-    test1 = test0.rewrite({})
-
-    assert test0 == test1
+@pytest.mark.parametrize(
+    "myObj,rewrites,output, expectation",
+    [
+        (Get("a"), {}, Get("a"), does_not_raise()),
+        (Put("a"), {}, Put("a"), does_not_raise()),
+        (Do([]), {}, Do([]), does_not_raise()),
+        (In_parallel([]), {}, In_parallel([]), does_not_raise()),
+        (Task("a"), {}, Task("a"), pytest.raises(Exception)),
+        (
+            Task("a", TaskConfig("linux", "sh")),
+            {},
+            Task("a", TaskConfig("linux", "sh")),
+            does_not_raise(),
+        ),
+    ],
+)
+def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation):
+    with expectation:
+        assert output == myObj.rewrite(rewrites)
 
 
 @pytest.mark.parametrize(
