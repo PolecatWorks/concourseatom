@@ -102,6 +102,51 @@ def test_Resource():
     assert test0 == test1
 
 
+def test_Get():
+    test0 = Get("a")
+
+    test1 = test0.rewrite({})
+
+    assert test0 == test1
+
+
+def test_Put():
+    test0 = Put("a")
+
+    test1 = test0.rewrite({})
+
+    assert test0 == test1
+
+
+def test_Do():
+    test0 = Do([])
+
+    test1 = test0.rewrite({})
+
+    assert test0 == test1
+
+
+def test_In_parallel():
+    test0 = In_parallel([])
+
+    test1 = test0.rewrite({})
+
+    assert test0 == test1
+
+
+def test_Task():
+    test0 = Task("a")
+
+    with pytest.raises(Exception):
+        test1 = test0.rewrite({})
+
+    test0 = Task("a", TaskConfig("linux", "sh"))
+
+    test1 = test0.rewrite({})
+
+    assert test0 == test1
+
+
 @pytest.mark.parametrize(
     "myClass, myYaml",
     [
@@ -749,6 +794,56 @@ def test_Pipeline_load():
             - !Resource
               name: d
               type: a
+              source:
+                e: g
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source:
+                e: f
+            - !Resource
+              name: d
+              type: a
+              source:
+                e: g
+            jobs: []
+            """,
+        ),
+        (
+            # Minimal merge to flattening resource_type and driving a rename of resource
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a
+              type: b
+            resources:
+            - !Resource
+              name: c
+              type: a
+              source:
+                e: f
+            jobs: []
+            """,
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: a1
+              type: b
+            resources:
+            - !Resource
+              name: d
+              type: a1
               source:
                 e: g
             jobs: []

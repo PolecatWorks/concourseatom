@@ -1,7 +1,8 @@
 """Data models for working with concourse data obejects
 """
 
-from __future__ import annotations  # This enables forward reference of types
+from __future__ import annotations
+from abc import ABC, abstractmethod  # This enables forward reference of types
 import dataclasses
 from typing import Any, Dict, Optional, List, Tuple, Union
 from ruamel.yaml import yaml_object, YAML
@@ -238,9 +239,15 @@ class TaskConfig(SetstateInitMixin):
     container_limits: Optional[Container_limits] = None
 
 
+class StepABC(ABC):
+    @abstractmethod
+    def rewrite(self, rewrites: Dict[str, str]) -> StepABC:
+        pass
+
+
 @yaml_object(yaml)
 @dataclass
-class Task(SetstateInitMixin):
+class Task(SetstateInitMixin, StepABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -258,10 +265,24 @@ class Task(SetstateInitMixin):
     input_mapping: Dict[str, str] = field(default_factory=dict)
     output_mapping: Dict[str, str] = field(default_factory=dict)
 
+    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+        if not self.config:
+            raise Exception(f"Task needs config for {self}")
+        if self.file:
+            raise Exception(f"No support for file in {self}")
+
+        return dataclasses.replace(
+            self,
+            input_mapping={input: rewrites[input.name] for input in self.config.inputs},
+            output_mapping={
+                output: rewrites[output.name] for output in self.config.outputs
+            },
+        )
+
 
 @yaml_object(yaml)
 @dataclass
-class Get(SetstateInitMixin):
+class Get(SetstateInitMixin, StepABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = field(default_factory=list)
@@ -273,10 +294,13 @@ class Get(SetstateInitMixin):
         if not self.resource:
             self.resource = self.get
 
+    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+        return dataclasses.replace(self)
+
 
 @yaml_object(yaml)
 @dataclass
-class Put(SetstateInitMixin):
+class Put(SetstateInitMixin, StepABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -287,19 +311,32 @@ class Put(SetstateInitMixin):
         if not self.resource:
             self.resource = self.put
 
+    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+        return dataclasses.replace(self)
+
 
 @yaml_object(yaml)
 @dataclass
-class Do(SetstateInitMixin):
+class Do(SetstateInitMixin, StepABC):
     do: List[Step]
 
+    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+        return dataclasses.replace(
+            self, do=[step.rewrite(rewrites) for step in self.do]
+        )
+
 
 @yaml_object(yaml)
 @dataclass
-class In_parallel(SetstateInitMixin):
+class In_parallel(SetstateInitMixin, StepABC):
     steps: List[Step] = field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
+
+    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+        return dataclasses.replace(
+            self, steps=[step.rewrite(rewrites) for step in self.steps]
+        )
 
 
 Step = Union[Get, Put, Task, In_parallel, Do]
@@ -327,7 +364,7 @@ class LogRetentionPolicy(SetstateInitMixin):
 @dataclass
 class Job(SetstateInitMixin):
     name: str
-    plan: List[Union[Task, Get, Put]]
+    plan: List[Step]
     old_name: Optional[str] = None
     serial: bool = False
     serial_groups: List[str] = field(default_factory=list)
@@ -357,6 +394,11 @@ class Job(SetstateInitMixin):
 
     def exactEq(self, other: Job) -> bool:
         return self.name == other.name and self == other
+
+    def rewrite(self, rewrites: Dict[str, str]) -> Job:
+        return dataclasses.replace(
+            self, plan=[step.rewrite(rewrites) for step in self.plan]
+        )
 
     @classmethod
     def uniques_and_rewrites(
@@ -392,11 +434,26 @@ class Job(SetstateInitMixin):
         return ret_list, appendMap
 
     @classmethod
-    def rewrite(cls, in_list: List[Job], rewrites: Dict[str, str]) -> List[Job]:
+    def rewrite_jobs(cls, in_jobs: List[Job], rewrites: Dict[str, str]) -> List[Job]:
+        # TODO: add Job rewrites here
+
+        jobs = [job.rewrite(rewrites) for job in in_jobs]
+
+        # for job in jobs:
+        #     for plan in job.plan:
+        #         print(f'Looking at plan: {plan}')
+        #         if isinstance(plan, Task):
+        #             print(f'  we have a task')
+        # iterate across in_list and apply rewrites identified
+        # in rewrites. Return a new list.__reduce__
+
+        # Rewrites MUST preserve inner naming convention even
+        # if they mutate the outer linkages.
 
         # return [dataclasses.replace(job, type=rewrites[job.type]) for job in in_list]
         print("REWRITE for job not implemented yet")
-        return in_list
+
+        return jobs
 
 
 @yaml_object(yaml)
@@ -468,7 +525,7 @@ class Pipeline:
         print(f"R = {resources}")
         print(f"R rewrites = {resource_rewrites}")
 
-        bThing_jobs = Job.rewrite(pipeline_right.jobs, resource_rewrites)
+        bThing_jobs = Job.rewrite_jobs(pipeline_right.jobs, resource_rewrites)
 
         jobs, job_rewrites = Job.uniques_and_rewrites(pipeline_left.jobs, bThing_jobs)
 
