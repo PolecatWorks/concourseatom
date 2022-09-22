@@ -107,15 +107,40 @@ def test_Resource():
 @pytest.mark.parametrize(
     "myObj,rewrites,output, expectation",
     [
-        (Get("a"), {}, Get("a"), does_not_raise()),
-        (Put("a"), {}, Put("a"), does_not_raise()),
+        (Get("a"), {"a": "a"}, Get("a"), does_not_raise()),
+        (Get("a"), {"a": "b"}, Get("b", "a"), does_not_raise()),
+        (Put("a"), {"a": "a"}, Put("a"), does_not_raise()),
+        (Put("a"), {"a": "b"}, Put("b", "a"), does_not_raise()),
         (Do([]), {}, Do([]), does_not_raise()),
+        (Do([Put("a")]), {"a": "a"}, Do([Put("a")]), does_not_raise()),
         (In_parallel([]), {}, In_parallel([]), does_not_raise()),
-        (Task("a"), {}, Task("a"), pytest.raises(Exception)),
+        (
+            In_parallel([Put("a")]),
+            {"a": "a"},
+            In_parallel([Put("a")]),
+            does_not_raise(),
+        ),
+        (Task("a"), {}, Task("a"), pytest.raises(Exception)),  # Config must be provided
         (
             Task("a", TaskConfig("linux", "sh")),
             {},
             Task("a", TaskConfig("linux", "sh")),
+            does_not_raise(),
+        ),
+        (
+            Task("a", TaskConfig("linux", "sh", inputs=["a"])),
+            {"a": "a"},
+            Task(
+                "a", TaskConfig("linux", "sh", inputs=["a"]), input_mapping={"a": "a"}
+            ),
+            does_not_raise(),
+        ),
+        (
+            Task("a", TaskConfig("linux", "sh", outputs=["a"])),
+            {"a": "a"},
+            Task(
+                "a", TaskConfig("linux", "sh", outputs=["a"]), output_mapping={"a": "a"}
+            ),
             does_not_raise(),
         ),
     ],
@@ -131,205 +156,205 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         (
             ResourceType,
             """ !ResourceType
-        name: a
-        type: b
-        source:
-          abc: def
-        privileged: True
-        params:
-          abb: ddd
-        check_every: 10m
-        tags:
-        - abc
-        - def
-        defaults:
-          acc: rby
-          add: fhfh
-    """,
+                name: a
+                type: b
+                source:
+                  abc: def
+                privileged: True
+                params:
+                  abb: ddd
+                check_every: 10m
+                tags:
+                - abc
+                - def
+                defaults:
+                  acc: rby
+                  add: fhfh
+            """,
         ),
         (
             Resource,
             """ !Resource
-        name: a
-        type: b
-        source:
-          abc: def
-        old_name: bruce
-        ico: icon1
-        version: v1
-        check_every: 10m
-        check_timeout: 1m
-        expose_build_created_by: True
-        tags:
-        - abc
-        - def
-        public: True
-        webhook_token: abcd
-    """,
+                name: a
+                type: b
+                source:
+                  abc: def
+                old_name: bruce
+                icon: icon1
+                version: v1
+                check_every: 10m
+                check_timeout: 1m
+                expose_build_created_by: True
+                tags:
+                - abc
+                - def
+                public: True
+                webhook_token: abcd
+            """,
         ),
         (
             Command,
             """ !Command
-        path: r
-        args:
-            - s
-        dir: t
-        user: v
-    """,
+                path: r
+                args:
+                    - s
+                dir: t
+                user: v
+            """,
         ),
         (
             Input,
             """ !Input
-        name: a
-        path: b
-        optional: True
-    """,
+                name: a
+                path: b
+                optional: True
+            """,
         ),
         (
             Output,
             """ !Output
-        name: 1
-        path: b
-    """,
+                name: 1
+                path: b
+            """,
         ),
         (
             Cache,
             """ !Cache
-        path: b
-    """,
+                path: b
+            """,
         ),
         (
             Container_limits,
             """ !Container_limits
-        cpu: 1
-        memory: 2
-    """,
+                cpu: 1
+                memory: 2
+            """,
         ),
         (
             TaskConfig,
             """ !TaskConfig
-        platform: a
-        image_resource:
-          b: c
-        run:
-          !Command
-          path: d
-        inputs:
-        - e
-        outputs:
-        - f
-        caches:
-        - g
-        params:
-          h: i
-        rootfs_uri: j
-        container_limits:
-          !Container_limits
-          cpu: 1
-          memory: 2
-    """,
+                platform: a
+                image_resource:
+                  b: c
+                run:
+                  !Command
+                  path: d
+                inputs:
+                - e
+                outputs:
+                - f
+                caches:
+                - g
+                params:
+                  h: i
+                rootfs_uri: j
+                container_limits:
+                  !Container_limits
+                  cpu: 1
+                  memory: 2
+            """,
         ),
         (
             Task,
             """ !Task
-        task: a
-        config:
-          !TaskConfig
-          platform: str
-          image_resource:
-            b: c
-          run:
-            path: d
-        file: e
-        image: f
-        priviledged: True
-        vars:
-          g: h
-        container_limits:
-          !Container_limits
-          cpu: 1
-          memory: 2
-        params:
-          i: j
-        input_mapping:
-          k: l
-        output_mapping:
-          m: n
-    """,
+                task: a
+                config:
+                  !TaskConfig
+                  platform: str
+                  image_resource:
+                    b: c
+                  run:
+                    path: d
+                file: e
+                image: f
+                priviledged: True
+                vars:
+                  g: h
+                container_limits:
+                  !Container_limits
+                  cpu: 1
+                  memory: 2
+                params:
+                  i: j
+                input_mapping:
+                  k: l
+                output_mapping:
+                  m: n
+            """,
         ),
         (
             Get,
             """ !Get
-        get: a
-        resource:
-          b: c
-        passed:
-        - d
-        params:
-          e: f
-        trigger: True
-        version: g
-    """,
+                get: a
+                resource:
+                  b: c
+                passed:
+                - d
+                params:
+                  e: f
+                trigger: True
+                version: g
+            """,
         ),
         (
             Put,
             """ !Put
-        put: a
-        resource: b
-        inputs: c
-        params:
-          d: e
-        get_params:
-          f: g
-    """,
+                put: a
+                resource: b
+                inputs: c
+                params:
+                  d: e
+                get_params:
+                  f: g
+            """,
         ),
         (
             Do,
             """ !Do
-        do:
-        - !Get
-          get: a
-    """,
+                do:
+                - !Get
+                  get: a
+            """,
         ),
         (
             In_parallel,
             """ !In_parallel
-        steps:
-        - !Get
-          get: a
-        limit: 1
-        fail_fast: True
-    """,
+                steps:
+                - !Get
+                  get: a
+                limit: 1
+                fail_fast: True
+            """,
         ),
         (
             LogRetentionPolicy,
             """ !LogRetentionPolicy
-        days: 1
-        builds: 2
-        minimum_succeeded_builds: 3
-    """,
+                days: 1
+                builds: 2
+                minimum_succeeded_builds: 3
+            """,
         ),
         (
             Job,
             """ !Job
-        name: a
-        plan:
-        - !Get
-          get: b
-        old_name: b
-        serial: True
-        serial_groups:
-        - c
-        max_in_flight: 1
-        build_log_retention:
-          !LogRetentionPolicy
-          days: 1
-          builds: 2
-          minimum_succeeded_builds: 3
-        public: True
-        disable_manual_trigger: True
-        interruptible: True
-    """,
+                name: a
+                plan:
+                - !Get
+                  get: b
+                old_name: b
+                serial: True
+                serial_groups:
+                - c
+                max_in_flight: 1
+                build_log_retention:
+                  !LogRetentionPolicy
+                  days: 1
+                  builds: 2
+                  minimum_succeeded_builds: 3
+                public: True
+                disable_manual_trigger: True
+                interruptible: True
+            """,
         ),
     ],
 )
@@ -425,48 +450,48 @@ def test_Pipeline():
     [
         (
             """
-      jobs:
-      - name: job
-        public: true
-        plan:
-        - task: simple-task
-          config:
-            platform: linux
-            image_resource:
-              type: registry-image
-              source: { repository: busybox }
-            run:
-              path: echo
-              args: ["Hello world!"]
-      """
+            jobs:
+            - name: job
+              public: true
+              plan:
+              - task: simple-task
+                config:
+                  platform: linux
+                  image_resource:
+                    type: registry-image
+                    source: { repository: busybox }
+                  run:
+                    path: echo
+                    args: ["Hello world!"]
+            """
         ),
         (
             """
-      resources:
-      - name: concourse-docs-git
-        type: git
-        icon: github
-        source:
-          uri: https://github.com/concourse/docs
+            resources:
+            - name: concourse-docs-git
+              type: git
+              icon: github
+              source:
+                uri: https://github.com/concourse/docs
 
-      jobs:
-      - name: job
-        public: true
-        plan:
-        - get: concourse-docs-git
-          trigger: true
-        - task: list-files
-          config:
-            inputs:
-              - name: concourse-docs-git
-            platform: linux
-            image_resource:
-              type: registry-image
-              source: { repository: busybox }
-            run:
-              path: ls
-              args: ["-la", "./concourse-docs-git"]
-      """
+            jobs:
+            - name: job
+              public: true
+              plan:
+              - get: concourse-docs-git
+                trigger: true
+              - task: list-files
+                config:
+                  inputs:
+                    - name: concourse-docs-git
+                  platform: linux
+                  image_resource:
+                    type: registry-image
+                    source: { repository: busybox }
+                  run:
+                    path: ls
+                    args: ["-la", "./concourse-docs-git"]
+            """
         ),
     ],
 )
@@ -478,7 +503,7 @@ def test_jobSampleLoad(myYaml):
 
 def test_Pipeline_load():
     loadyaml_a = dedent(
-        """\
+        """
         !Pipeline
         resource_types:
         - !ResourceType
@@ -501,7 +526,7 @@ def test_Pipeline_load():
           source:
             c: d
           old_name: e
-          ico: f
+          icon: f
           version: g
           check_every: 10m
           check_timeout: 2h
@@ -581,6 +606,55 @@ def test_Pipeline_load():
     print(f"Loaded job is {loadyaml_a}")
     test_a = yaml.load(loadyaml_a)
     print(f"Read as {test_a}")
+
+
+@pytest.mark.parametrize(
+    "myyaml, valid",
+    [
+        (
+            """
+            !Pipeline
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            True,
+        ),
+        (
+            """
+            !Pipeline
+            resource_types: []
+            resources:
+            - !Resource
+              name: a
+              type: b
+              source: {}
+            jobs: []
+            """,
+            False,
+        ),
+        (
+            """
+            !Pipeline
+            resource_types:
+            - !ResourceType
+              name: b
+              type: c
+            resources:
+            - !Resource
+              name: a
+              type: b
+              source: {}
+            jobs: []
+            """,
+            True,
+        ),
+    ],
+)
+def test_pipeline_validate(myyaml: str, valid: bool):
+    obj_left = yaml.load(dedent(myyaml))
+
+    assert obj_left.validate() == valid
 
 
 @pytest.mark.parametrize(
@@ -858,19 +932,43 @@ def test_merge(yamlLeft, yamlRight, yamlMerged):
     assert obj_merged == merged
 
 
+# @pytest.mark.skip(reason="broken at moment")
 def test_Pipeline_merge():
 
     loadyaml_a = dedent(
         """\
-        !Pipeline
-        resource_types:
-        - !ResourceType
-          name: a
-          type: a
-          source: {}
-        resources: []
-        jobs: []
-        """
+!Pipeline
+resource_types:
+- !ResourceType
+  name: git
+  type: blue
+resources:
+- !Resource
+  name: concourse-docs-git
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/concourse/docs
+
+jobs:
+- !Job
+  name: job
+  public: true
+  plan:
+  - get: concourse-docs-git
+    trigger: true
+  - task: list-files
+    config:
+      inputs:
+        - name: concourse-docs-git
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: { repository: busybox }
+      run:
+        path: ls
+        args: ["-la", "./concourse-docs-git"]
+"""
     )
 
     print(f"merge yaml from = \n{loadyaml_a}")
@@ -882,27 +980,23 @@ def test_Pipeline_merge():
     test_b = yaml.load(
         dedent(
             """
-        !Pipeline
-        resource_types:
-        - !ResourceType
-          name: a
-          type: a
-          source: {}
-        - !ResourceType
-          name: b
-          type: b
-          source: {}
-        resources: []
-        jobs:
-        - !Job
-          name: a
-          plan: []
-        - !Job
-          name: b
-          plan:
-          - !Get
-            get: myget
-    """
+!Pipeline
+resource_types:
+- !ResourceType
+  name: a
+  type: a
+resources:
+- !Resource
+  name: b
+  type: a
+  source: {}
+jobs:
+- !Job
+  name: a
+  plan:
+  - !Get
+    get: b
+"""
         )
     )
 
@@ -917,27 +1011,50 @@ def test_Pipeline_merge():
     manual_merged = yaml.load(
         dedent(
             """
-        !Pipeline
-        resource_types:
-        - !ResourceType
-          name: a
-          type: a
-          source: {}
-        - !ResourceType
-          name: b
-          type: b
-          source: {}
-        resources: []
-        jobs:
-        - !Job
-          name: a
-          plan: []
-        - !Job
-          name: b
-          plan:
-          - !Get
-            get: myget
-      """
+!Pipeline
+resource_types:
+- !ResourceType
+  name: git
+  type: blue
+- !ResourceType
+  name: a
+  type: a
+resources:
+- !Resource
+  name: b
+  type: a
+  source: {}
+- !Resource
+  name: concourse-docs-git
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/concourse/docs
+
+jobs:
+- !Job
+  name: job
+  public: true
+  plan:
+  - get: concourse-docs-git
+    trigger: true
+  - task: list-files
+    config:
+      inputs:
+        - name: concourse-docs-git
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: { repository: busybox }
+      run:
+        path: ls
+        args: ["-la", "./concourse-docs-git"]
+- !Job
+  name: a
+  plan:
+  - !Get
+    get: b
+"""
         )
     )
 

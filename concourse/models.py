@@ -35,7 +35,7 @@ class SetstateInitMixin:
 
 
 @yaml_object(yaml)
-@dataclass
+@dataclass(order=True)
 class ResourceType(SetstateInitMixin):
     name: str
     type: str
@@ -95,13 +95,13 @@ class ResourceType(SetstateInitMixin):
 
 
 @yaml_object(yaml)
-@dataclass
+@dataclass(order=True)
 class Resource(SetstateInitMixin):
     name: str
     type: str
     source: Dict[str, Any]
     old_name: Optional[str] = None
-    ico: Optional[str] = None
+    icon: Optional[str] = None
     version: Optional[str] = None
     check_every: str = "1m"
     check_timeout: str = "1h"
@@ -115,7 +115,7 @@ class Resource(SetstateInitMixin):
             self.type == other.type
             and self.source == other.source
             and self.old_name == other.old_name
-            and self.ico == other.ico
+            and self.icon == other.icon
             and self.version == other.version
             and self.check_every == other.check_every
             and self.check_timeout == other.check_timeout
@@ -251,7 +251,6 @@ class Task(SetstateInitMixin, StepABC):
     """Concourse Task class
 
     :param task: Name of the task
-    :type task: str
     """
 
     task: str
@@ -273,10 +272,8 @@ class Task(SetstateInitMixin, StepABC):
 
         return dataclasses.replace(
             self,
-            input_mapping={input: rewrites[input.name] for input in self.config.inputs},
-            output_mapping={
-                output: rewrites[output.name] for output in self.config.outputs
-            },
+            input_mapping={input: rewrites[input] for input in self.config.inputs},
+            output_mapping={output: rewrites[output] for output in self.config.outputs},
         )
 
 
@@ -295,7 +292,7 @@ class Get(SetstateInitMixin, StepABC):
             self.resource = self.get
 
     def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(self)
+        return dataclasses.replace(self, get=rewrites[self.get])
 
 
 @yaml_object(yaml)
@@ -312,7 +309,7 @@ class Put(SetstateInitMixin, StepABC):
             self.resource = self.put
 
     def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(self)
+        return dataclasses.replace(self, put=rewrites[self.put])
 
 
 @yaml_object(yaml)
@@ -361,7 +358,7 @@ class LogRetentionPolicy(SetstateInitMixin):
 
 
 @yaml_object(yaml)
-@dataclass
+@dataclass(order=True)
 class Job(SetstateInitMixin):
     name: str
     plan: List[Step]
@@ -451,19 +448,24 @@ class Job(SetstateInitMixin):
         # if they mutate the outer linkages.
 
         # return [dataclasses.replace(job, type=rewrites[job.type]) for job in in_list]
-        print("REWRITE for job not implemented yet")
+        # print("REWRITE for job not implemented yet")
 
         return jobs
 
 
 @yaml_object(yaml)
 @dataclass
-class Pipeline:
+class Pipeline(SetstateInitMixin):
     """Definition of a concourse plan"""
 
     resource_types: list[ResourceType] = field(default_factory=list)
     resources: list[Resource] = field(default_factory=list)
     jobs: List[Job] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.resource_types.sort()
+        self.resources.sort()
+        self.jobs.sort()
 
     def validate(self) -> bool:
         """Check if the Pipeline is valid
@@ -471,7 +473,8 @@ class Pipeline:
         Rules:
 
         - Check that all resource types referred to from resources are defined
-
+        - Check that all resources used by Get and Put are defined in Resources
+            (TODO: Add check for resources)
         :return: all rules are passed
         """
         resource_type_names = [rt.name for rt in self.resource_types]
