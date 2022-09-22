@@ -27,7 +27,7 @@ test:
 	$(PYTEST) ${PYTEST_ARGS}
 	# -k Resource
 
-coverage: export PYTEST_ARGS=--cov-report xml:cov.xml
+coverage: export PYTEST_ARGS=--cov-report xml:cov.xml --cov=concourse
 coverage: test
 
 docs:
