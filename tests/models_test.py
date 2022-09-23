@@ -5,7 +5,7 @@ from contextlib import nullcontext as does_not_raise
 
 import io
 from typing import Any, Dict
-from concourse.models import (
+from concourseatom.models import (
     Cache,
     Command,
     Container_limits,

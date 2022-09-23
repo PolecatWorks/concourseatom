@@ -4,7 +4,7 @@
 import io
 import click
 import ruamel.yaml
-from concourse.models import Pipeline, Job, Resource, ResourceType
+from concourseatom.models import Pipeline, Job, Resource, ResourceType
 
 yaml = ruamel.yaml.YAML()
 
