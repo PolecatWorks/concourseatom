@@ -3,14 +3,10 @@
 
 from __future__ import annotations
 from abc import ABC, abstractmethod  # This enables forward reference of types
-import dataclasses
 from typing import Any, Dict, Optional, List, Tuple, Union
-from ruamel.yaml import yaml_object, YAML
 
-from dataclasses import dataclass, field
-
-
-yaml = YAML()
+from pydantic import Field
+from pydantic_yaml import YamlModel
 
 
 def get_random_ingredients(kind=None):
@@ -34,17 +30,20 @@ class SetstateInitMixin:
         self.__init__(**state)
 
 
-@yaml_object(yaml)
-@dataclass(order=True)
-class ResourceType(SetstateInitMixin):
+class Sortable:
+    def __lt__(self, other):
+        return tuple(self.dict().values()) < tuple(other.dict().values())
+
+
+class ResourceType(YamlModel, Sortable):
     name: str
     type: str
-    source: Dict[str, Any] = field(default_factory=dict)
+    source: Dict[str, Any] = Field(default_factory=dict)
     privileged: bool = False
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: Dict[str, Any] = Field(default_factory=dict)
     check_every: str = "1m"
-    tags: list[str] = field(default_factory=list)
-    defaults: Dict[str, Any] = field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    defaults: Dict[str, Any] = Field(default_factory=dict)
 
     def __eq__(self, other: ResourceType) -> bool:
         return (
@@ -94,9 +93,7 @@ class ResourceType(SetstateInitMixin):
         return ret_list, appendMap
 
 
-@yaml_object(yaml)
-@dataclass(order=True)
-class Resource(SetstateInitMixin):
+class Resource(YamlModel, Sortable):
     name: str
     type: str
     source: Dict[str, Any]
@@ -106,7 +103,7 @@ class Resource(SetstateInitMixin):
     check_every: str = "1m"
     check_timeout: str = "1h"
     expose_build_created_by: bool = False
-    tags: list[str] = field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     public: bool = False
     webhook_token: Optional[str] = None
 
@@ -167,14 +164,12 @@ class Resource(SetstateInitMixin):
     ) -> List[Resource]:
 
         return [
-            dataclasses.replace(resource, type=rewrites[resource.type])
+            resource.copy(deep=True, update={"type": rewrites[resource.type]})
             for resource in in_list
         ]
 
 
-@yaml_object(yaml)
-@dataclass
-class Command(SetstateInitMixin):
+class Command(YamlModel):
     """Command definition for task
 
     :param path: Path to executable
@@ -184,14 +179,12 @@ class Command(SetstateInitMixin):
     """
 
     path: str
-    args: List[str] = field(default_factory=list)
+    args: List[str] = Field(default_factory=list)
     dir: Optional[str] = None
     user: Optional[str] = None
 
 
-@yaml_object(yaml)
-@dataclass
-class Input(SetstateInitMixin):
+class Input(YamlModel):
     name: str
     path: Optional[str] = None
     optional: bool = False
@@ -201,9 +194,7 @@ class Input(SetstateInitMixin):
             self.path = self.name
 
 
-@yaml_object(yaml)
-@dataclass
-class Output(SetstateInitMixin):
+class Output(YamlModel):
     name: str
     path: Optional[str] = None
 
@@ -212,29 +203,23 @@ class Output(SetstateInitMixin):
             self.path = self.name
 
 
-@yaml_object(yaml)
-@dataclass
-class Cache(SetstateInitMixin):
+class Cache(YamlModel):
     path: str
 
 
-@yaml_object(yaml)
-@dataclass
-class Container_limits(SetstateInitMixin):
+class Container_limits(YamlModel):
     cpu: int
     memory: int
 
 
-@yaml_object(yaml)
-@dataclass
-class TaskConfig(SetstateInitMixin):
+class TaskConfig(YamlModel):
     platform: str
     run: Command
     image_resource: Optional[Resource] = None
-    inputs: List[Input] = field(default_factory=list)
-    outputs: List[Output] = field(default_factory=list)
-    caches: List[Cache] = field(default_factory=list)
-    params: Dict[str, str] = field(default_factory=dict)
+    inputs: List[Input] = Field(default_factory=list)
+    outputs: List[Output] = Field(default_factory=list)
+    caches: List[Cache] = Field(default_factory=list)
+    params: Dict[str, str] = Field(default_factory=dict)
     rootfs_uri: Optional[str] = None
     container_limits: Optional[Container_limits] = None
 
@@ -245,9 +230,7 @@ class StepABC(ABC):
         pass
 
 
-@yaml_object(yaml)
-@dataclass
-class Task(SetstateInitMixin, StepABC):
+class Task(YamlModel, StepABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -258,11 +241,11 @@ class Task(SetstateInitMixin, StepABC):
     file: Optional[str] = None
     image: Optional[str] = None
     priviledged: bool = False
-    vars: Dict[str, str] = field(default_factory=dict)
+    vars: Dict[str, str] = Field(default_factory=dict)
     container_limits: Optional[Container_limits] = None
-    params: Dict[str, str] = field(default_factory=dict)
-    input_mapping: Dict[str, str] = field(default_factory=dict)
-    output_mapping: Dict[str, str] = field(default_factory=dict)
+    params: Dict[str, str] = Field(default_factory=dict)
+    input_mapping: Dict[str, str] = Field(default_factory=dict)
+    output_mapping: Dict[str, str] = Field(default_factory=dict)
 
     def rewrite(self, rewrites: Dict[str, str]) -> Get:
         if not self.config:
@@ -270,19 +253,23 @@ class Task(SetstateInitMixin, StepABC):
         if self.file:
             raise Exception(f"No support for file in {self}")
 
-        return dataclasses.replace(
-            self,
-            input_mapping={input: rewrites[input] for input in self.config.inputs},
-            output_mapping={output: rewrites[output] for output in self.config.outputs},
+        return self.copy(
+            deep=True,
+            update={
+                "input_mapping": {
+                    input.name: rewrites[input.name] for input in self.config.inputs
+                },
+                "output_mapping": {
+                    output.name: rewrites[output.name] for output in self.config.outputs
+                },
+            },
         )
 
 
-@yaml_object(yaml)
-@dataclass
-class Get(SetstateInitMixin, StepABC):
+class Get(YamlModel, StepABC):
     get: str
     resource: Optional[str] = None
-    passed: List[str] = field(default_factory=list)
+    passed: List[str] = Field(default_factory=list)
     params: Optional[Any] = None
     trigger: bool = False
     version: str = "latest"
@@ -292,12 +279,10 @@ class Get(SetstateInitMixin, StepABC):
             self.resource = self.get
 
     def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(self, get=rewrites[self.get])
+        return self.copy(deep=True, update={"get": rewrites[self.get]})
 
 
-@yaml_object(yaml)
-@dataclass
-class Put(SetstateInitMixin, StepABC):
+class Put(YamlModel, StepABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -308,40 +293,37 @@ class Put(SetstateInitMixin, StepABC):
         if not self.resource:
             self.resource = self.put
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(self, put=rewrites[self.put])
+    def rewrite(self, rewrites: Dict[str, str]) -> Put:
+        return self.copy(deep=True, update={"put": rewrites[self.put]})
 
 
-@yaml_object(yaml)
-@dataclass
-class Do(SetstateInitMixin, StepABC):
+class Do(YamlModel, StepABC):
     do: List[Step]
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(
-            self, do=[step.rewrite(rewrites) for step in self.do]
+    def rewrite(self, rewrites: Dict[str, str]) -> Do:
+        return self.copy(
+            deep=True, update={"do": [step.rewrite(rewrites) for step in self.do]}
         )
 
 
-@yaml_object(yaml)
-@dataclass
-class In_parallel(SetstateInitMixin, StepABC):
-    steps: List[Step] = field(default_factory=list)
+class In_parallel(YamlModel, StepABC):
+    steps: List[Step] = Field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return dataclasses.replace(
-            self, steps=[step.rewrite(rewrites) for step in self.steps]
+    def rewrite(self, rewrites: Dict[str, str]) -> In_parallel:
+        return self.copy(
+            deep=True, update={"steps": [step.rewrite(rewrites) for step in self.steps]}
         )
 
 
 Step = Union[Get, Put, Task, In_parallel, Do]
 
+Do.update_forward_refs()
+In_parallel.update_forward_refs()
 
-@yaml_object(yaml)
-@dataclass
-class LogRetentionPolicy(SetstateInitMixin):
+
+class LogRetentionPolicy(YamlModel):
     """Log Retention for concoure job
 
     :param days: Number of days to keep logs for
@@ -357,14 +339,12 @@ class LogRetentionPolicy(SetstateInitMixin):
     minimum_succeeded_builds: int
 
 
-@yaml_object(yaml)
-@dataclass(order=True)
-class Job(SetstateInitMixin):
+class Job(YamlModel, Sortable):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
     serial: bool = False
-    serial_groups: List[str] = field(default_factory=list)
+    serial_groups: List[str] = Field(default_factory=list)
     max_in_flight: Optional[int] = None
     build_log_retention: Optional[LogRetentionPolicy] = None
     public: bool = False
@@ -393,8 +373,8 @@ class Job(SetstateInitMixin):
         return self.name == other.name and self == other
 
     def rewrite(self, rewrites: Dict[str, str]) -> Job:
-        return dataclasses.replace(
-            self, plan=[step.rewrite(rewrites) for step in self.plan]
+        return self.copy(
+            deep=True, update={"plan": [step.rewrite(rewrites) for step in self.plan]}
         )
 
     @classmethod
@@ -453,14 +433,19 @@ class Job(SetstateInitMixin):
         return jobs
 
 
-@yaml_object(yaml)
-@dataclass
-class Pipeline(SetstateInitMixin):
+class Pipeline(YamlModel):
     """Definition of a concourse plan"""
 
-    resource_types: list[ResourceType] = field(default_factory=list)
-    resources: list[Resource] = field(default_factory=list)
-    jobs: List[Job] = field(default_factory=list)
+    resource_types: list[ResourceType] = Field(default_factory=list)
+    resources: list[Resource] = Field(default_factory=list)
+    jobs: List[Job] = Field(default_factory=list)
+
+    def __eq__(self, other: Pipeline) -> bool:
+        return (
+            sorted(self.resource_types) == sorted(other.resource_types)
+            and sorted(self.resources) == sorted(other.resources)
+            and sorted(self.jobs) == sorted(other.jobs)
+        )
 
     def __post_init__(self):
         self.resource_types.sort()

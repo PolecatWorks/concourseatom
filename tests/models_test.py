@@ -3,7 +3,6 @@
 from contextlib import nullcontext as does_not_raise
 
 
-import io
 from typing import Any, Dict
 from concourseatom.models import (
     Cache,
@@ -23,123 +22,146 @@ from concourseatom.models import (
     Task,
     TaskConfig,
 )
-import ruamel.yaml
 from textwrap import dedent
 import pytest
 
-yaml = ruamel.yaml.YAML()
-
 
 def test_ResourceType():
-    test0 = ResourceType("a", "b", {})
-    assert test0 == ResourceType("a", "b", {})
+    test0 = ResourceType(name="a", type="b", source={})
+    assert test0 == ResourceType(name="a", type="b", source={})
 
-    assert test0 == ResourceType("ax", "b", {})
-    assert not test0.exactEq(ResourceType("ax", "b", {}))
-    assert test0 != ResourceType("a", "bx", {})
-    assert test0 != ResourceType("a", "b", {"d": "e"})
+    assert test0 == ResourceType(name="ax", type="b", source={})
+    assert not test0.exactEq(ResourceType(name="ax", type="b", source={}))
+    assert test0 != ResourceType(name="a", type="bx", source={})
+    assert test0 != ResourceType(name="a", type="b", source={"d": "e"})
 
-    assert test0 != ResourceType("a", "b", {}, True)
+    assert test0 != ResourceType(name="a", type="b", source={}, privileged=True)
 
     resource_types, rewrites = Resource.uniques_and_rewrites(
         [
-            ResourceType("a", "x", {}),
-            ResourceType("c", "y", {}),
+            ResourceType(name="a", type="x", source={}),
+            ResourceType(name="c", type="y", source={}),
         ],
         [
-            ResourceType("b", "x", {}),
-            ResourceType("a", "z", {}),
+            ResourceType(name="b", type="x", source={}),
+            ResourceType(name="a", type="z", source={}),
         ],
     )
     assert resource_types == [
-        ResourceType("a", "x", {}),
-        ResourceType("c", "y", {}),
-        ResourceType("c", "z", {}),
+        ResourceType(name="a", type="x", source={}),
+        ResourceType(name="c", type="y", source={}),
+        ResourceType(name="c", type="z", source={}),
     ]
     assert rewrites == {"b": "a", "a": "a-0"}
 
-    stream = io.StringIO()
-    yaml.dump(test0, stream)
+    stream = test0.yaml()
 
-    print(stream.getvalue())
+    print(stream)
 
-    test1 = yaml.load(stream.getvalue())
+    test1 = ResourceType.parse_raw(stream)
     assert test0 == test1
 
 
 def test_Resource():
-    test0 = Resource("a", "b", {})
-    assert test0 == Resource("a", "b", {})
+    test0 = Resource(name="a", type="b", source={})
+    assert test0 == Resource(name="a", type="b", source={})
 
-    assert test0 == Resource("ax", "b", {})
-    assert not test0.exactEq(Resource("ax", "b", {}))
+    assert test0 == Resource(name="ax", type="b", source={})
+    assert not test0.exactEq(Resource(name="ax", type="b", source={}))
 
-    assert test0 != Resource("a", "bx", {})
-    assert test0 != Resource("a", "b", {"c": "d"})
-    assert test0 != Resource("a", "b", {}, "x")
+    assert test0 != Resource(name="a", type="bx", source={})
+    assert test0 != Resource(name="a", type="b", source={"c": "d"})
+    assert test0 != Resource(name="a", type="b", source={}, old_name="x")
 
     resources, rewrites = Resource.uniques_and_rewrites(
         [
-            Resource("a", "x", {}),
-            Resource("c", "y", {}),
+            Resource(name="a", type="x", source={}),
+            Resource(name="c", type="y", source={}),
         ],
         [
-            Resource("b", "x", {}),
-            Resource("a", "z", {}),
+            Resource(name="b", type="x", source={}),
+            Resource(name="a", type="z", source={}),
         ],
     )
     assert resources == [
-        Resource("a", "x", {}),
-        Resource("c", "y", {}),
-        Resource("c", "z", {}),
+        Resource(name="a", type="x", source={}),
+        Resource(name="c", type="y", source={}),
+        Resource(name="c", type="z", source={}),
     ]
     assert rewrites == {"b": "a", "a": "a-0"}
 
-    stream = io.StringIO()
-    yaml.dump(test0, stream)
+    stream = test0.yaml()
 
-    print(stream.getvalue())
+    print(stream)
 
-    test1 = yaml.load(stream.getvalue())
+    test1 = Resource.parse_raw(stream)
     assert test0 == test1
 
 
 @pytest.mark.parametrize(
     "myObj,rewrites,output, expectation",
     [
-        (Get("a"), {"a": "a"}, Get("a"), does_not_raise()),
-        (Get("a"), {"a": "b"}, Get("b", "a"), does_not_raise()),
-        (Put("a"), {"a": "a"}, Put("a"), does_not_raise()),
-        (Put("a"), {"a": "b"}, Put("b", "a"), does_not_raise()),
-        (Do([]), {}, Do([]), does_not_raise()),
-        (Do([Put("a")]), {"a": "a"}, Do([Put("a")]), does_not_raise()),
-        (In_parallel([]), {}, In_parallel([]), does_not_raise()),
+        (Get(get="a"), {"a": "a"}, Get(get="a"), does_not_raise()),
+        (Get(get="a"), {"a": "b"}, Get(get="b", type="a"), does_not_raise()),
+        (Put(put="a"), {"a": "a"}, Put(put="a"), does_not_raise()),
+        (Put(put="a"), {"a": "b"}, Put(put="b", type="a"), does_not_raise()),
+        (Do(do=[]), {}, Do(do=[]), does_not_raise()),
+        (Do(do=[Put(put="a")]), {"a": "a"}, Do(do=[Put(put="a")]), does_not_raise()),
         (
-            In_parallel([Put("a")]),
-            {"a": "a"},
-            In_parallel([Put("a")]),
-            does_not_raise(),
-        ),
-        (Task("a"), {}, Task("a"), pytest.raises(Exception)),  # Config must be provided
-        (
-            Task("a", TaskConfig("linux", "sh")),
+            In_parallel(In_parallel=[]),
             {},
-            Task("a", TaskConfig("linux", "sh")),
+            In_parallel(In_parallel=[]),
             does_not_raise(),
         ),
         (
-            Task("a", TaskConfig("linux", "sh", inputs=["a"])),
+            In_parallel(in_parallel=[Put(put="a")]),
+            {"a": "a"},
+            In_parallel(in_parallel=[Put(put="a")]),
+            does_not_raise(),
+        ),
+        (
+            Task(task="a"),
+            {},
+            Task(task="a"),
+            pytest.raises(Exception),
+        ),  # Config must be provided
+        (
+            Task(task="a", config=TaskConfig(platform="linux", run=Command(path="sh"))),
+            {},
+            Task(task="a", config=TaskConfig(platform="linux", run=Command(path="sh"))),
+            does_not_raise(),
+        ),
+        (
+            Task(
+                task="a",
+                config=TaskConfig(
+                    platform="linux", run=Command(path="sh"), inputs=[Input(name="a")]
+                ),
+            ),
             {"a": "a"},
             Task(
-                "a", TaskConfig("linux", "sh", inputs=["a"]), input_mapping={"a": "a"}
+                task="a",
+                config=TaskConfig(
+                    platform="linux", run=Command(path="sh"), inputs=[Input(name="a")]
+                ),
+                input_mapping={"a": "a"},
             ),
             does_not_raise(),
         ),
         (
-            Task("a", TaskConfig("linux", "sh", outputs=["a"])),
+            Task(
+                task="a",
+                config=TaskConfig(
+                    platform="linux", run=Command(path="sh"), outputs=[Output(name="a")]
+                ),
+            ),
             {"a": "a"},
             Task(
-                "a", TaskConfig("linux", "sh", outputs=["a"]), output_mapping={"a": "a"}
+                task="a",
+                config=TaskConfig(
+                    platform="linux", run=Command(path="sh"), outputs=[Output(name="a")]
+                ),
+                output_mapping={"a": "a"},
             ),
             does_not_raise(),
         ),
@@ -155,7 +177,7 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
     [
         (
             ResourceType,
-            """ !ResourceType
+            """
                 name: a
                 type: b
                 source:
@@ -174,7 +196,7 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Resource,
-            """ !Resource
+            """
                 name: a
                 type: b
                 source:
@@ -194,7 +216,7 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Command,
-            """ !Command
+            """
                 path: r
                 args:
                     - s
@@ -203,8 +225,28 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
             """,
         ),
         (
+            Command,
+            """
+                path: ls
+                args:
+                    - -la
+                    - ./concourse-docs-git
+                dir: t
+                user: v
+            """,
+        ),
+        (
+            Command,
+            """
+                path: ls
+                args: ["-la", "./concourse-docs-git"]
+                dir: t
+                user: v
+            """,
+        ),
+        (
             Input,
-            """ !Input
+            """
                 name: a
                 path: b
                 optional: True
@@ -212,57 +254,58 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Output,
-            """ !Output
+            """
                 name: 1
                 path: b
             """,
         ),
         (
             Cache,
-            """ !Cache
+            """
                 path: b
             """,
         ),
         (
             Container_limits,
-            """ !Container_limits
+            """
                 cpu: 1
                 memory: 2
             """,
         ),
         (
             TaskConfig,
-            """ !TaskConfig
+            """
                 platform: a
                 image_resource:
-                  b: c
+                  name: a
+                  type: b
+                  source: {}
                 run:
-                  !Command
                   path: d
                 inputs:
-                - e
+                - name: e
                 outputs:
-                - f
+                - name: f
                 caches:
-                - g
+                - path: g
                 params:
                   h: i
                 rootfs_uri: j
                 container_limits:
-                  !Container_limits
                   cpu: 1
                   memory: 2
             """,
         ),
         (
             Task,
-            """ !Task
+            """
                 task: a
                 config:
-                  !TaskConfig
                   platform: str
                   image_resource:
-                    b: c
+                    name: b
+                    type: c
+                    source: {}
                   run:
                     path: d
                 file: e
@@ -271,7 +314,6 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
                 vars:
                   g: h
                 container_limits:
-                  !Container_limits
                   cpu: 1
                   memory: 2
                 params:
@@ -284,10 +326,9 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Get,
-            """ !Get
+            """
                 get: a
-                resource:
-                  b: c
+                resource: b
                 passed:
                 - d
                 params:
@@ -298,7 +339,7 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Put,
-            """ !Put
+            """
                 put: a
                 resource: b
                 inputs: c
@@ -310,25 +351,23 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Do,
-            """ !Do
+            """
                 do:
-                - !Get
-                  get: a
+                - get: a
             """,
         ),
         (
             In_parallel,
-            """ !In_parallel
+            """
                 steps:
-                - !Get
-                  get: a
+                - get: a
                 limit: 1
                 fail_fast: True
             """,
         ),
         (
             LogRetentionPolicy,
-            """ !LogRetentionPolicy
+            """
                 days: 1
                 builds: 2
                 minimum_succeeded_builds: 3
@@ -336,18 +375,16 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Job,
-            """ !Job
+            """
                 name: a
                 plan:
-                - !Get
-                  get: b
+                - get: b
                 old_name: b
                 serial: True
                 serial_groups:
                 - c
                 max_in_flight: 1
                 build_log_retention:
-                  !LogRetentionPolicy
                   days: 1
                   builds: 2
                   minimum_succeeded_builds: 3
@@ -361,73 +398,71 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
 def test_read_classes(myClass, myYaml):
     loadyaml_a = dedent(myYaml)
     print(f"Loading from yaml {loadyaml_a}")
-    test0 = yaml.load(loadyaml_a)
+    test0 = myClass.parse_raw(loadyaml_a)
     print(f"Read as {test0}")
 
     assert isinstance(test0, myClass)
 
-    stream = io.StringIO()
-    yaml.dump(test0, stream)
+    stream = test0.yaml()
 
-    print(stream.getvalue())
+    print(stream)
 
-    test1 = yaml.load(stream.getvalue())
+    test1 = myClass.parse_raw(stream)
     assert test0 == test1
 
 
 def test_Job():
-    test0 = Job("a", [])
-    assert test0 == Job("a", [])
+    test0 = Job(name="a", plan=[])
+    assert test0 == Job(name="a", plan=[])
 
-    assert test0 == Job("ax", [])
-    assert test0 != Job("ax", [], "ax")
+    assert test0 == Job(name="ax", plan=[])
+    assert test0 != Job(name="ax", plan=[], old_name="ax")
 
     test0 = Job(
-        "a",
-        [
-            Put("a"),
-            Get("b"),
+        name="a",
+        plan=[
+            Put(put="a"),
+            Get(get="b"),
         ],
     )
 
-    stream = io.StringIO()
-    yaml.dump(test0, stream)
+    stream = test0.yaml()
 
-    print(stream.getvalue())
+    print(stream)
 
-    test1 = yaml.load(stream.getvalue())
+    test1 = Job.parse_raw(stream)
     assert test0 == test1
 
 
 def test_Pipeline():
     test0 = Pipeline(
         resource_types=[
-            ResourceType("a", "x", {}),
+            ResourceType(name="a", type="x", source={}),
         ],
         resources=[
-            Resource("b", "a", {}),
+            Resource(name="b", type="a", source={}),
         ],
         jobs=[],
     )
 
     assert test0 == Pipeline(
         resource_types=[
-            ResourceType("a", "x", {}),
+            ResourceType(name="a", type="x", source={}),
         ],
         resources=[
-            Resource("b", "a", {}),
+            Resource(name="b", type="a", source={}),
         ],
         jobs=[],
     )
 
     test1 = Pipeline(
         resource_types=[
-            ResourceType("b", "x", {}),
-            ResourceType("c", "y", {}),
+            ResourceType(name="b", type="x", source={}),
+            ResourceType(name="c", type="y", source={}),
         ],
         resources=[
-            Resource("a", "b", {}),
-            Resource("ax", "c", {}),
+            Resource(name="a", type="b", source={}),
+            Resource(name="ax", type="c", source={}),
         ],
         jobs=[],
     )
@@ -436,12 +471,11 @@ def test_Pipeline():
 
     print(merged)
 
-    stream = io.StringIO()
-    yaml.dump(test0, stream)
+    stream = merged.yaml()
 
-    print(stream.getvalue())
+    print(stream)
 
-    test1 = yaml.load(stream.getvalue())
+    test1 = Pipeline.parse_raw(stream)
     assert test0 == test1
 
 
@@ -497,17 +531,15 @@ def test_Pipeline():
 )
 def test_jobSampleLoad(myYaml):
     print(f"Loaded job is {myYaml}")
-    test_a = yaml.load(myYaml)
+    test_a = Pipeline.parse_raw(myYaml)
     print(f"Read as {test_a}")
 
 
 def test_Pipeline_load():
     loadyaml_a = dedent(
         """
-        !Pipeline
         resource_types:
-        - !ResourceType
-          name: a
+        - name: a
           type: b
           source:
             c: d
@@ -516,12 +548,11 @@ def test_Pipeline_load():
             e: f
           check_every: 10m
           tags:
-            g: h
+          - g
           defaults:
             i: j
         resources:
-        - !Resource
-          name: a
+        - name: a
           type: b
           source:
             c: d
@@ -532,15 +563,13 @@ def test_Pipeline_load():
           check_timeout: 2h
           expose_build_created_by: True
           tags:
-            h: i
+          - h
           public: True
           webhook_token: j
         jobs:
-        - !Job
-          name: a
+        - name: a
           plan:
-          - !Get
-            get: b
+          - get: b
             resource: c
             passed:
             - d
@@ -548,23 +577,19 @@ def test_Pipeline_load():
               e: f
             trigger: True
             version: "1"
-          - !Put
-            put: g
+          - put: g
             resource: h
             inputs: i
             params:
               j: k
             get_params:
               l: m
-          - !Task
-            task: n
+          - task: n
             config:
-              !TaskConfig
               platform: o
               image_resource:
                 p: q
               run:
-                !Command
                 path: r
                 args:
                   - s
@@ -580,7 +605,6 @@ def test_Pipeline_load():
               - z
               rootfs_uri: a1
               container_limits:
-                !Container_limits
                 cpu: 1
                 memory: 2
             file: b1
@@ -589,7 +613,6 @@ def test_Pipeline_load():
             vars:
               d1: e1
             container_limits:
-              !Container_limits
               cpu: 3
               memory: 4
             params:
@@ -600,11 +623,10 @@ def test_Pipeline_load():
               k1: l1
           old_name: m1
           serial: True
-
         """
     )
     print(f"Loaded job is {loadyaml_a}")
-    test_a = yaml.load(loadyaml_a)
+    test_a = Pipeline.parse_raw(loadyaml_a)
     print(f"Read as {test_a}")
 
 
@@ -613,7 +635,6 @@ def test_Pipeline_load():
     [
         (
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
@@ -622,11 +643,9 @@ def test_Pipeline_load():
         ),
         (
             """
-            !Pipeline
             resource_types: []
             resources:
-            - !Resource
-              name: a
+            - name: a
               type: b
               source: {}
             jobs: []
@@ -635,14 +654,11 @@ def test_Pipeline_load():
         ),
         (
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: b
+            - name: b
               type: c
             resources:
-            - !Resource
-              name: a
+            - name: a
               type: b
               source: {}
             jobs: []
@@ -652,7 +668,7 @@ def test_Pipeline_load():
     ],
 )
 def test_pipeline_validate(myyaml: str, valid: bool):
-    obj_left = yaml.load(dedent(myyaml))
+    obj_left = Pipeline.parse_raw(dedent(myyaml))
 
     assert obj_left.validate() == valid
 
@@ -663,19 +679,16 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Empty Pipeline
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
@@ -684,25 +697,20 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal Pipeline
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources: []
             jobs: []
@@ -711,33 +719,26 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal Associative
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
             """,
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
@@ -746,33 +747,26 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal Associative - reversed
             """
-            !Pipeline
             resource_types: []
             resources: []
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
@@ -781,40 +775,31 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal merge to flatten resource_type and resource
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: d
+            - name: d
               type: a
               source: {}
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source: {}
             jobs: []
@@ -823,47 +808,37 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal merge to flattening resource_type keeping resource
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source:
                 e: f
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: d
+            - name: d
               type: a
               source:
                 e: g
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source:
                 e: f
-            - !Resource
-              name: d
+            - name: d
               type: a
               source:
                 e: g
@@ -873,47 +848,37 @@ def test_pipeline_validate(myyaml: str, valid: bool):
         (
             # Minimal merge to flattening resource_type and driving a rename of resource
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source:
                 e: f
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a1
+            - name: a1
               type: b
             resources:
-            - !Resource
-              name: d
+            - name: d
               type: a1
               source:
                 e: g
             jobs: []
             """,
             """
-            !Pipeline
             resource_types:
-            - !ResourceType
-              name: a
+            - name: a
               type: b
             resources:
-            - !Resource
-              name: c
+            - name: c
               type: a
               source:
                 e: f
-            - !Resource
-              name: d
+            - name: d
               type: a
               source:
                 e: g
@@ -923,9 +888,9 @@ def test_pipeline_validate(myyaml: str, valid: bool):
     ],
 )
 def test_merge(yamlLeft, yamlRight, yamlMerged):
-    obj_left = yaml.load(dedent(yamlLeft))
-    obj_right = yaml.load(dedent(yamlRight))
-    obj_merged = yaml.load(dedent(yamlMerged))
+    obj_left = Pipeline.parse_raw(dedent(yamlLeft))
+    obj_right = Pipeline.parse_raw(dedent(yamlRight))
+    obj_merged = Pipeline.parse_raw(dedent(yamlMerged))
 
     merged = Pipeline.merge(obj_left, obj_right)
 
@@ -937,22 +902,18 @@ def test_Pipeline_merge():
 
     loadyaml_a = dedent(
         """\
-!Pipeline
 resource_types:
-- !ResourceType
-  name: git
+- name: git
   type: blue
 resources:
-- !Resource
-  name: concourse-docs-git
+- name: concourse-docs-git
   type: git
   icon: github
   source:
     uri: https://github.com/concourse/docs
 
 jobs:
-- !Job
-  name: job
+- name: job
   public: true
   plan:
   - get: concourse-docs-git
@@ -973,29 +934,24 @@ jobs:
 
     print(f"merge yaml from = \n{loadyaml_a}")
 
-    test_a = yaml.load(loadyaml_a)
+    test_a = Pipeline.parse_raw(loadyaml_a)
 
     print(f"merge read a = {test_a}")
 
-    test_b = yaml.load(
+    test_b = Pipeline.parse_raw(
         dedent(
             """
-!Pipeline
 resource_types:
-- !ResourceType
-  name: a
+- name: a
   type: a
 resources:
-- !Resource
-  name: b
+- name: b
   type: a
   source: {}
 jobs:
-- !Job
-  name: a
+- name: a
   plan:
-  - !Get
-    get: b
+  - get: b
 """
         )
     )
@@ -1004,36 +960,28 @@ jobs:
 
     merged = Pipeline.merge(test_a, test_b)
 
-    stream = io.StringIO()
-    yaml.dump(merged, stream)
-    print(f"Merged full = {stream.getvalue()}")
+    print(f"Merged full = {merged.yaml()}")
 
-    manual_merged = yaml.load(
+    manual_merged = Pipeline.parse_raw(
         dedent(
             """
-!Pipeline
 resource_types:
-- !ResourceType
-  name: git
+- name: git
   type: blue
-- !ResourceType
-  name: a
+- name: a
   type: a
 resources:
-- !Resource
-  name: b
+- name: b
   type: a
   source: {}
-- !Resource
-  name: concourse-docs-git
+- name: concourse-docs-git
   type: git
   icon: github
   source:
     uri: https://github.com/concourse/docs
 
 jobs:
-- !Job
-  name: job
+- name: job
   public: true
   plan:
   - get: concourse-docs-git
@@ -1049,11 +997,9 @@ jobs:
       run:
         path: ls
         args: ["-la", "./concourse-docs-git"]
-- !Job
-  name: a
+- name: a
   plan:
-  - !Get
-    get: b
+  - get: b
 """
         )
     )
