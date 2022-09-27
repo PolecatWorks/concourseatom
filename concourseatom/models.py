@@ -73,24 +73,32 @@ class ResourceType(YamlModel, Sortable):
         """
 
         ret_list: List[ResourceType] = aList.copy()
-        appendMap: Dict[str, str] = {}
+        rewrite_map: Dict[str, str] = {}
 
         for item in bList:
-            if item in ret_list:  # Item already exists so just map it
-                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
-            elif [
-                resource for resource in ret_list if resource.name == item.name
-            ]:  # Name already used for different item so rename it and then add
-                b_name_alt = "fff"
-                # todo: check alt is unique in ret_list
-                appendMap[item.name] = b_name_alt
-                item.name = b_name_alt
-                ret_list.append(item)
-            else:  # Item is unique so add it
-                appendMap[item.name] = item.name
-                ret_list.append(item)
+            if item in ret_list:  # Item already exists so map it
+                rewrite_map[item.name] = next(
+                    obj.name for obj in ret_list if obj == item
+                )
+            elif any(
+                resource.name == item.name for resource in ret_list
+            ):  # Name already used for different item so rename it and then add
+                namelist = [resource.name for resource in ret_list]
 
-        return ret_list, appendMap
+                index_num = 0
+                b_alt_name = f"{item.name}-{index_num:0>3}"
+                while b_alt_name in namelist:
+                    index_num += 1
+                    b_alt_name = f"{item.name}-{index_num:0>3}"
+
+                rewrite_map[item.name] = b_alt_name
+
+                ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
+            else:  # Item is unique so add it
+                rewrite_map[item.name] = item.name
+                ret_list.append(item.copy(deep=True))
+
+        return ret_list, rewrite_map
 
 
 class Resource(YamlModel, Sortable):
@@ -445,6 +453,27 @@ class Pipeline(YamlModel):
             sorted(self.resource_types) == sorted(other.resource_types)
             and sorted(self.resources) == sorted(other.resources)
             and sorted(self.jobs) == sorted(other.jobs)
+        )
+
+    def exactEq(self, other: Pipeline) -> bool:
+        if self != other:
+            return False
+
+        return (
+            all(
+                left.exactEq(right)
+                for left, right in zip(
+                    sorted(self.resource_types), sorted(other.resource_types)
+                )
+            )
+            and all(
+                left.exactEq(right)
+                for left, right in zip(sorted(self.resources), sorted(other.resources))
+            )
+            and all(
+                left.exactEq(right)
+                for left, right in zip(sorted(self.jobs), sorted(other.jobs))
+            )
         )
 
     def __post_init__(self):

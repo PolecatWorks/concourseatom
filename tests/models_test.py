@@ -62,6 +62,97 @@ def test_ResourceType():
     assert test0 == test1
 
 
+@pytest.mark.parametrize(
+    "list_left, list_right,expected_uniques, expected_rewrites",
+    [
+        ([], [], [], {}),  # Empty
+        (  # Map to existing
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            {
+                "a": "a",
+            },
+        ),
+        (  # Map to new
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            [
+                ResourceType(name="c", type="d"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+                ResourceType(name="c", type="d"),
+            ],
+            {
+                "c": "c",
+            },
+        ),
+        (  # Map to existing but with orig name
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            [
+                ResourceType(name="c", type="b"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            {
+                "c": "a",
+            },
+        ),
+        (  # Map to new but with alt name
+            [
+                ResourceType(name="a", type="b"),
+            ],
+            [
+                ResourceType(name="a", type="c"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+                ResourceType(name="a-000", type="c"),
+            ],
+            {
+                "a": "a-000",
+            },
+        ),
+        (  # Map to new but with alt name and increment
+            [
+                ResourceType(name="a", type="b"),
+                ResourceType(name="a-000", type="d"),
+            ],
+            [
+                ResourceType(name="a", type="c"),
+            ],
+            [
+                ResourceType(name="a", type="b"),
+                ResourceType(name="a-000", type="d"),
+                ResourceType(name="a-001", type="c"),
+            ],
+            {
+                "a": "a-001",
+            },
+        ),
+    ],
+)
+def test_ResourceType_uniques_rewrites(
+    list_left, list_right, expected_uniques, expected_rewrites
+):
+    uniques, rewrites = ResourceType.uniques_and_rewrites(list_left, list_right)
+
+    assert uniques == expected_uniques
+    assert all(u.exactEq(eu) for u, eu in zip(uniques, expected_uniques))
+    assert rewrites == expected_rewrites
+
+
 def test_Resource():
     test0 = Resource(name="a", type="b", source={})
     assert test0 == Resource(name="a", type="b", source={})
@@ -434,49 +525,154 @@ def test_Job():
     assert test0 == test1
 
 
-def test_Pipeline():
-    test0 = Pipeline(
-        resource_types=[
-            ResourceType(name="a", type="x", source={}),
-        ],
-        resources=[
-            Resource(name="b", type="a", source={}),
-        ],
-        jobs=[],
-    )
+@pytest.mark.parametrize(
+    "yaml_l, yaml_r, yaml_merged",
+    [
+        (  # Empty content merge
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # LHS provide content
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # RHS provide content
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # Merge identical values
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # Merge identical types (priorities name to be LHS)
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: b
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # Merge identical names (differing content to generate new name)
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a2
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            - name: a-000
+              type: a2
+            resources: []
+            jobs: []
+            """,
+        ),
+    ],
+)
+def test_merge_pipelines(yaml_l, yaml_r, yaml_merged):
 
-    assert test0 == Pipeline(
-        resource_types=[
-            ResourceType(name="a", type="x", source={}),
-        ],
-        resources=[
-            Resource(name="b", type="a", source={}),
-        ],
-        jobs=[],
-    )
+    test_l = Pipeline.parse_raw(dedent(yaml_l))
+    test_r = Pipeline.parse_raw(dedent(yaml_r))
 
-    test1 = Pipeline(
-        resource_types=[
-            ResourceType(name="b", type="x", source={}),
-            ResourceType(name="c", type="y", source={}),
-        ],
-        resources=[
-            Resource(name="a", type="b", source={}),
-            Resource(name="ax", type="c", source={}),
-        ],
-        jobs=[],
-    )
+    merged_expected = Pipeline.parse_raw(dedent(yaml_merged))
 
-    merged = Pipeline.merge(test0, test1)
+    merged = Pipeline.merge(test_l, test_r)
 
-    print(merged)
+    print(merged.yaml())
 
-    stream = merged.yaml()
-
-    print(stream)
-
-    test1 = Pipeline.parse_raw(stream)
-    assert test0 == test1
+    assert merged_expected == merged
+    assert merged_expected.exactEq(merged)
 
 
 @pytest.mark.parametrize(
@@ -671,337 +867,3 @@ def test_pipeline_validate(myyaml: str, valid: bool):
     obj_left = Pipeline.parse_raw(dedent(myyaml))
 
     assert obj_left.validate() == valid
-
-
-@pytest.mark.parametrize(
-    "yamlLeft, yamlRight, yamlMerged",
-    [
-        (
-            # Empty Pipeline
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal Pipeline
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources: []
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal Associative
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal Associative - reversed
-            """
-            resource_types: []
-            resources: []
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal merge to flatten resource_type and resource
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: d
-              type: a
-              source: {}
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source: {}
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal merge to flattening resource_type keeping resource
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source:
-                e: f
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: d
-              type: a
-              source:
-                e: g
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source:
-                e: f
-            - name: d
-              type: a
-              source:
-                e: g
-            jobs: []
-            """,
-        ),
-        (
-            # Minimal merge to flattening resource_type and driving a rename of resource
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source:
-                e: f
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a1
-              type: b
-            resources:
-            - name: d
-              type: a1
-              source:
-                e: g
-            jobs: []
-            """,
-            """
-            resource_types:
-            - name: a
-              type: b
-            resources:
-            - name: c
-              type: a
-              source:
-                e: f
-            - name: d
-              type: a
-              source:
-                e: g
-            jobs: []
-            """,
-        ),
-    ],
-)
-def test_merge(yamlLeft, yamlRight, yamlMerged):
-    obj_left = Pipeline.parse_raw(dedent(yamlLeft))
-    obj_right = Pipeline.parse_raw(dedent(yamlRight))
-    obj_merged = Pipeline.parse_raw(dedent(yamlMerged))
-
-    merged = Pipeline.merge(obj_left, obj_right)
-
-    assert obj_merged == merged
-
-
-# @pytest.mark.skip(reason="broken at moment")
-def test_Pipeline_merge():
-
-    loadyaml_a = dedent(
-        """\
-resource_types:
-- name: git
-  type: blue
-resources:
-- name: concourse-docs-git
-  type: git
-  icon: github
-  source:
-    uri: https://github.com/concourse/docs
-
-jobs:
-- name: job
-  public: true
-  plan:
-  - get: concourse-docs-git
-    trigger: true
-  - task: list-files
-    config:
-      inputs:
-        - name: concourse-docs-git
-      platform: linux
-      image_resource:
-        type: registry-image
-        source: { repository: busybox }
-      run:
-        path: ls
-        args: ["-la", "./concourse-docs-git"]
-"""
-    )
-
-    print(f"merge yaml from = \n{loadyaml_a}")
-
-    test_a = Pipeline.parse_raw(loadyaml_a)
-
-    print(f"merge read a = {test_a}")
-
-    test_b = Pipeline.parse_raw(
-        dedent(
-            """
-resource_types:
-- name: a
-  type: a
-resources:
-- name: b
-  type: a
-  source: {}
-jobs:
-- name: a
-  plan:
-  - get: b
-"""
-        )
-    )
-
-    print(f"merge read b = {test_b}")
-
-    merged = Pipeline.merge(test_a, test_b)
-
-    print(f"Merged full = {merged.yaml()}")
-
-    manual_merged = Pipeline.parse_raw(
-        dedent(
-            """
-resource_types:
-- name: git
-  type: blue
-- name: a
-  type: a
-resources:
-- name: b
-  type: a
-  source: {}
-- name: concourse-docs-git
-  type: git
-  icon: github
-  source:
-    uri: https://github.com/concourse/docs
-
-jobs:
-- name: job
-  public: true
-  plan:
-  - get: concourse-docs-git
-    trigger: true
-  - task: list-files
-    config:
-      inputs:
-        - name: concourse-docs-git
-      platform: linux
-      image_resource:
-        type: registry-image
-        source: { repository: busybox }
-      run:
-        path: ls
-        args: ["-la", "./concourse-docs-git"]
-- name: a
-  plan:
-  - get: b
-"""
-        )
-    )
-
-    assert merged == manual_merged
