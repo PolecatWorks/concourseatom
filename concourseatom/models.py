@@ -35,34 +35,20 @@ class Sortable:
         return tuple(self.dict().values()) < tuple(other.dict().values())
 
 
-class ResourceType(YamlModel, Sortable):
-    name: str
-    type: str
-    source: Dict[str, Any] = Field(default_factory=dict)
-    privileged: bool = False
-    params: Dict[str, Any] = Field(default_factory=dict)
-    check_every: str = "1m"
-    tags: list[str] = Field(default_factory=list)
-    defaults: Dict[str, Any] = Field(default_factory=dict)
+class RewriteABC(ABC):
+    @abstractmethod
+    def rewrite(self, rewrites: Dict[str, str]) -> RewriteABC:
+        pass
 
-    def __eq__(self, other: ResourceType) -> bool:
-        return (
-            self.type == other.type
-            and self.source == other.source
-            and self.privileged == other.privileged
-            and self.params == other.params
-            and self.check_every == other.check_every
-            and self.tags == other.tags
-            and self.defaults == other.defaults
-        )
 
-    def exactEq(self, other: ResourceType) -> bool:
+class Rewrites(RewriteABC):
+    def exactEq(self, other: Rewrites) -> bool:
         return self.name == other.name and self == other
 
     @classmethod
     def uniques_and_rewrites(
-        cls, aList: List[ResourceType], bList: List[ResourceType]
-    ) -> Tuple[List[ResourceType], Dict[str, str]]:
+        cls, aList: List[Rewrites], bList: List[Rewrites]
+    ) -> Tuple[List[Rewrites], Dict[str, str]]:
         """
         aList gets priority and copied verbatim
         If item already exists in aList then create rewrite for that
@@ -72,7 +58,7 @@ class ResourceType(YamlModel, Sortable):
         return the final list
         """
 
-        ret_list: List[ResourceType] = aList.copy()
+        ret_list: List[Rewrites] = aList.copy()
         rewrite_map: Dict[str, str] = {}
 
         for item in bList:
@@ -100,8 +86,40 @@ class ResourceType(YamlModel, Sortable):
 
         return ret_list, rewrite_map
 
+    @classmethod
+    def rewrites(
+        cls, in_list: List[Rewrites], rewrites: Dict[str, str]
+    ) -> List[Rewrites]:
+        """Apply rewrite pattern to type parameter"""
+        return [resource.rewrite(rewrites) for resource in in_list]
 
-class Resource(YamlModel, Sortable):
+
+class ResourceType(YamlModel, Sortable, Rewrites):
+    name: str
+    type: str
+    source: Dict[str, Any] = Field(default_factory=dict)
+    privileged: bool = False
+    params: Dict[str, Any] = Field(default_factory=dict)
+    check_every: str = "1m"
+    tags: list[str] = Field(default_factory=list)
+    defaults: Dict[str, Any] = Field(default_factory=dict)
+
+    def __eq__(self, other: ResourceType) -> bool:
+        return (
+            self.type == other.type
+            and self.source == other.source
+            and self.privileged == other.privileged
+            and self.params == other.params
+            and self.check_every == other.check_every
+            and self.tags == other.tags
+            and self.defaults == other.defaults
+        )
+
+    def rewrite(self, rewrites: Dict[str, str]) -> ResourceType:
+        return self.copy(deep=True, update={"type": rewrites[self.type]})
+
+
+class Resource(YamlModel, Sortable, Rewrites):
     name: str
     type: str
     source: Dict[str, Any]
@@ -130,51 +148,8 @@ class Resource(YamlModel, Sortable):
             and self.webhook_token == other.webhook_token
         )
 
-    def exactEq(self, other: Resource) -> bool:
-        return self.name == other.name and self == other
-
-    @classmethod
-    def uniques_and_rewrites(
-        cls, aList: List[Resource], bList: List[Resource]
-    ) -> Tuple[List[Resource], Dict[str, str]]:
-
-        ret_list: List[Resource] = aList.copy()
-        appendMap: Dict[str, str] = {}
-
-        for item in bList:
-            if item in ret_list:  # Item already exists so just map it
-                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
-            elif [
-                resource for resource in ret_list if resource.name == item.name
-            ]:  # Name already used for different item so rename it and then add
-                unique_num = 0
-                while [
-                    resource
-                    for resource in ret_list
-                    if resource.name == f"{item.name}-{unique_num}"
-                ]:
-                    unique_num += 1
-
-                b_name_alt = f"{item.name}-{unique_num}"
-                # todo: check alt is unique in ret_list
-                appendMap[item.name] = b_name_alt
-                item.name = b_name_alt
-                ret_list.append(item)
-            else:  # Item is unique so add it
-                appendMap[item.name] = item.name
-                ret_list.append(item)
-
-        return ret_list, appendMap
-
-    @classmethod
-    def rewrite(
-        cls, in_list: List[Resource], rewrites: Dict[str, str]
-    ) -> List[Resource]:
-
-        return [
-            resource.copy(deep=True, update={"type": rewrites[resource.type]})
-            for resource in in_list
-        ]
+    def rewrite(self, rewrites: Dict[str, str]) -> Resource:
+        return self.copy(deep=True, update={"type": rewrites[self.type]})
 
 
 class Command(YamlModel):
@@ -232,13 +207,7 @@ class TaskConfig(YamlModel):
     container_limits: Optional[Container_limits] = None
 
 
-class StepABC(ABC):
-    @abstractmethod
-    def rewrite(self, rewrites: Dict[str, str]) -> StepABC:
-        pass
-
-
-class Task(YamlModel, StepABC):
+class Task(YamlModel, RewriteABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -274,7 +243,7 @@ class Task(YamlModel, StepABC):
         )
 
 
-class Get(YamlModel, StepABC):
+class Get(YamlModel, RewriteABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = Field(default_factory=list)
@@ -290,7 +259,7 @@ class Get(YamlModel, StepABC):
         return self.copy(deep=True, update={"get": rewrites[self.get]})
 
 
-class Put(YamlModel, StepABC):
+class Put(YamlModel, RewriteABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -305,7 +274,7 @@ class Put(YamlModel, StepABC):
         return self.copy(deep=True, update={"put": rewrites[self.put]})
 
 
-class Do(YamlModel, StepABC):
+class Do(YamlModel, RewriteABC):
     do: List[Step]
 
     def rewrite(self, rewrites: Dict[str, str]) -> Do:
@@ -314,7 +283,7 @@ class Do(YamlModel, StepABC):
         )
 
 
-class In_parallel(YamlModel, StepABC):
+class In_parallel(YamlModel, RewriteABC):
     steps: List[Step] = Field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
@@ -347,7 +316,7 @@ class LogRetentionPolicy(YamlModel):
     minimum_succeeded_builds: int
 
 
-class Job(YamlModel, Sortable):
+class Job(YamlModel, Sortable, Rewrites):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
@@ -377,68 +346,22 @@ class Job(YamlModel, Sortable):
             and self.interruptible == other.interruptible
         )
 
-    def exactEq(self, other: Job) -> bool:
-        return self.name == other.name and self == other
-
     def rewrite(self, rewrites: Dict[str, str]) -> Job:
         return self.copy(
-            deep=True, update={"plan": [step.rewrite(rewrites) for step in self.plan]}
+            deep=True,
+            update={
+                "plan": [step.rewrite(rewrites) for step in self.plan],
+                "on_success": self.on_success.rewrite(rewrites)
+                if self.on_success
+                else None,
+                "on_failure": self.on_failure.rewrite(rewrites)
+                if self.on_failure
+                else None,
+                "on_error": self.on_error.rewrite(rewrites) if self.on_error else None,
+                "on_abort": self.on_abort.rewrite(rewrites) if self.on_abort else None,
+                "ensure": self.ensure.rewrite(rewrites) if self.ensure else None,
+            },
         )
-
-    @classmethod
-    def uniques_and_rewrites(
-        cls, aList: List[Job], bList: List[Job]
-    ) -> Tuple[List[Job], Dict[str, str]]:
-
-        ret_list: List[Job] = aList.copy()
-        appendMap: Dict[str, str] = {}
-
-        for item in bList:
-            if item in ret_list:  # Item already exists so just map it
-                appendMap[item.name] = next(obj.name for obj in ret_list if obj == item)
-            elif [
-                resource for resource in ret_list if resource.name == item.name
-            ]:  # Name already used for different item so rename it and then add
-                unique_num = 0
-                while [
-                    resource
-                    for resource in ret_list
-                    if resource.name == f"{item.name}-{unique_num}"
-                ]:
-                    unique_num += 1
-
-                b_name_alt = f"{item.name}-{unique_num}"
-                # todo: check alt is unique in ret_list
-                appendMap[item.name] = b_name_alt
-                item.name = b_name_alt
-                ret_list.append(item)
-            else:  # Item is unique so add it
-                appendMap[item.name] = item.name
-                ret_list.append(item)
-
-        return ret_list, appendMap
-
-    @classmethod
-    def rewrite_jobs(cls, in_jobs: List[Job], rewrites: Dict[str, str]) -> List[Job]:
-        # TODO: add Job rewrites here
-
-        jobs = [job.rewrite(rewrites) for job in in_jobs]
-
-        # for job in jobs:
-        #     for plan in job.plan:
-        #         print(f'Looking at plan: {plan}')
-        #         if isinstance(plan, Task):
-        #             print(f'  we have a task')
-        # iterate across in_list and apply rewrites identified
-        # in rewrites. Return a new list.__reduce__
-
-        # Rewrites MUST preserve inner naming convention even
-        # if they mutate the outer linkages.
-
-        # return [dataclasses.replace(job, type=rewrites[job.type]) for job in in_list]
-        # print("REWRITE for job not implemented yet")
-
-        return jobs
 
 
 class Pipeline(YamlModel):
@@ -532,7 +455,7 @@ class Pipeline(YamlModel):
         print(f"RT = {resource_types}")
         print(f"RT rewrites = {resource_types_rewrites}")
 
-        bThing_resource_renames = Resource.rewrite(
+        bThing_resource_renames = Resource.rewrites(
             pipeline_right.resources, resource_types_rewrites
         )
 
@@ -542,7 +465,7 @@ class Pipeline(YamlModel):
         print(f"R = {resources}")
         print(f"R rewrites = {resource_rewrites}")
 
-        bThing_jobs = Job.rewrite_jobs(pipeline_right.jobs, resource_rewrites)
+        bThing_jobs = Job.rewrites(pipeline_right.jobs, resource_rewrites)
 
         jobs, job_rewrites = Job.uniques_and_rewrites(pipeline_left.jobs, bThing_jobs)
 

@@ -52,7 +52,7 @@ def test_ResourceType():
         ResourceType(name="c", type="y", source={}),
         ResourceType(name="c", type="z", source={}),
     ]
-    assert rewrites == {"b": "a", "a": "a-0"}
+    assert rewrites == {"b": "a", "a": "a-000"}
 
     stream = test0.yaml()
 
@@ -179,7 +179,7 @@ def test_Resource():
         Resource(name="c", type="y", source={}),
         Resource(name="c", type="z", source={}),
     ]
-    assert rewrites == {"b": "a", "a": "a-0"}
+    assert rewrites == {"b": "a", "a": "a-000"}
 
     stream = test0.yaml()
 
