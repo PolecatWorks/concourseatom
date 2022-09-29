@@ -658,6 +658,59 @@ def test_Job():
             jobs: []
             """,
         ),
+        (  # Merge XXXXXX
+            """
+            resource_types:
+            - name: a
+              type: a1
+            resources:
+            - name: g
+              type: a
+              source: {}
+            jobs:
+            - name: k
+              plan:
+              - get: g
+              - put: g
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a2
+            resources:
+            - name: g
+              type: a
+              source: {}
+            jobs:
+            - name: l
+              plan:
+              - get: g
+              - put: g
+            """,
+            """
+            resource_types:
+            - name: a
+              type: a1
+            - name: a-000
+              type: a2
+            resources:
+            - name: g
+              type: a
+              source: {}
+            - name: g-000
+              type: a-000
+              source: {}
+            jobs:
+            - name: k
+              plan:
+              - get: g
+              - put: g
+            - name: l
+              plan:
+              - get: g-000
+              - put: g-000
+            """,
+        ),
     ],
 )
 def test_merge_pipelines(yaml_l, yaml_r, yaml_merged):

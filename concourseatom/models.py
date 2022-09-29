@@ -21,20 +21,6 @@ def get_random_ingredients(kind=None):
     return ["shells", "gorgonzola", "parsley"]
 
 
-class SetstateInitMixin:
-    """Inject setstate function to class via a mixin"""
-
-    def __setstate__(self, state):
-        """Call init here so that yaml.load correctly initialises the objects.
-        This can be a performance penalty"""
-        self.__init__(**state)
-
-
-class Sortable:
-    def __lt__(self, other):
-        return tuple(self.dict().values()) < tuple(other.dict().values())
-
-
 class RewriteABC(ABC):
     @abstractmethod
     def rewrite(self, rewrites: Dict[str, str]) -> RewriteABC:
@@ -44,6 +30,9 @@ class RewriteABC(ABC):
 class Rewrites(RewriteABC):
     def exactEq(self, other: Rewrites) -> bool:
         return self.name == other.name and self == other
+
+    def __lt__(self, other):
+        return self.name < other.name
 
     @classmethod
     def uniques_and_rewrites(
@@ -94,7 +83,7 @@ class Rewrites(RewriteABC):
         return [resource.rewrite(rewrites) for resource in in_list]
 
 
-class ResourceType(YamlModel, Sortable, Rewrites):
+class ResourceType(YamlModel, Rewrites):
     name: str
     type: str
     source: Dict[str, Any] = Field(default_factory=dict)
@@ -118,8 +107,11 @@ class ResourceType(YamlModel, Sortable, Rewrites):
     def rewrite(self, rewrites: Dict[str, str]) -> ResourceType:
         return self.copy(deep=True, update={"type": rewrites[self.type]})
 
+    def __lt__(self, other):
+        return self.type < other.type
 
-class Resource(YamlModel, Sortable, Rewrites):
+
+class Resource(YamlModel, Rewrites):
     name: str
     type: str
     source: Dict[str, Any]
@@ -150,6 +142,9 @@ class Resource(YamlModel, Sortable, Rewrites):
 
     def rewrite(self, rewrites: Dict[str, str]) -> Resource:
         return self.copy(deep=True, update={"type": rewrites[self.type]})
+
+    def __lt__(self, other):
+        return self.type < other.type
 
 
 class Command(YamlModel):
@@ -316,7 +311,7 @@ class LogRetentionPolicy(YamlModel):
     minimum_succeeded_builds: int
 
 
-class Job(YamlModel, Sortable, Rewrites):
+class Job(YamlModel, Rewrites):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
