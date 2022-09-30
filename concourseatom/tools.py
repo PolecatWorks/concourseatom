@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 """CLI tools for working with concourse objects
 """
-import io
 import sys
 import click
-import ruamel.yaml
 
-yaml = ruamel.yaml.YAML()
-
+from concourseatom.models import Pipeline
 
 # ------------- CLI Boiler plate here -------------
 
@@ -68,19 +65,19 @@ def read_file(ctx, infile):
 )  # , help="File to load as second file for merge")
 def merge(ctx, infile0, infile1):
     """
-    Merge concourse jobs expect input from stdin and output in stdout
+    Merge concourse jobs expect input from stdin and output in stdout.
+    Optionally provide both input file names as arguments
     """
     if ctx.obj["DEBUG"]:
         click.echo(f"Starting to merge0 {infile0.name}", err=True)
         click.echo(f"Starting to merge1 {infile1.name}", err=True)
 
-    pipe0 = yaml.load(infile0)
-    # pipe1 = yaml.load(infile1)
+    pipe0 = Pipeline.parse_raw(infile0)
+    pipe1 = Pipeline.parse_raw(infile1)
 
-    stream = io.StringIO()
-    yaml.dump(pipe0, stream)
+    merge = Pipeline.merge(pipe0, pipe1)
 
-    click.echo(stream.getvalue())
+    click.echo(merge.yaml())
 
 
 if __name__ == "__main__":

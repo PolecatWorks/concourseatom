@@ -433,9 +433,6 @@ class Pipeline(YamlModel):
             Merged output from combination of both inputs with minimised
             :class:`Resource` s and :class:`ResourceType` s
         """
-        print(f"My job is merging two jobs:\n  {pipeline_left}\n  {pipeline_right}")
-
-        # resource_types_input = aThing.resource_types + bThing.resource_types
 
         if not pipeline_left.validate():
             raise Exception(f"pipeline_left is not valid: {pipeline_left}")
@@ -447,9 +444,6 @@ class Pipeline(YamlModel):
             pipeline_left.resource_types, pipeline_right.resource_types
         )
 
-        print(f"RT = {resource_types}")
-        print(f"RT rewrites = {resource_types_rewrites}")
-
         bThing_resource_renames = Resource.rewrites(
             pipeline_right.resources, resource_types_rewrites
         )
@@ -457,17 +451,9 @@ class Pipeline(YamlModel):
         resources, resource_rewrites = Resource.uniques_and_rewrites(
             pipeline_left.resources, bThing_resource_renames
         )
-        print(f"R = {resources}")
-        print(f"R rewrites = {resource_rewrites}")
 
         bThing_jobs = Job.rewrites(pipeline_right.jobs, resource_rewrites)
 
         jobs, job_rewrites = Job.uniques_and_rewrites(pipeline_left.jobs, bThing_jobs)
-
-        # noqa: E501 # For the jobs. Need to recurse through the obejcts to apply rewrites to them based on resource rewrites.
-        # noqa: E501 #This will result in the correctly nameed/mapped resources in teh bThing to match the merged resources.
-        # noqa: E501 #Next step is to work out how to merge the jobs:
-        # noqa: E501 #    1. Dont merge just keep them together (side by side). (should be simple viable optoin)
-        # noqa: E501 #    2. Work out where they share name and share parts of pipeline then merge those.    (MAYBE not a good idea)
 
         return Pipeline(resource_types=resource_types, resources=resources, jobs=jobs)
