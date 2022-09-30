@@ -15,7 +15,7 @@ Sample Usage in code
 
 Setup a simple Resource
 
->>> from concourse import models
+>>> from concourseatom import models
 >>> models.get_random_ingredients()
 ['shells', 'gorgonzola', 'parsley']
 

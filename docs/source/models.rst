@@ -1,9 +1,9 @@
-models module
-=============
+Models
+======
 
 Define the data models
 
-.. automodule:: concourse.models
+.. automodule:: concourseatom.models
    :members:
    :undoc-members:
    :show-inheritance:
