@@ -72,6 +72,7 @@ def generate_test_filename(request, filename):
     "filename0, filename1",
     [
         ("pipeline00.yaml", "pipeline01.yaml"),
+        ("pipeline00.yaml", "manually-triggered.yaml"),
     ],
 )
 def test_merge_cli(cli_runner, request, filename0, filename1):
@@ -82,6 +83,7 @@ def test_merge_cli(cli_runner, request, filename0, filename1):
     print(f"Merge data1 = {file1}")
 
     result = cli_runner.invoke(merge, [file0, file1])
+
     print(result)
     # assert result.exit_code == 0
     # assert result.output == "lflfflfllf\n"
