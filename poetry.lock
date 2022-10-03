@@ -560,6 +560,19 @@ testing = ["covdefaults (>=2.2)", "coverage (>=6.4.2)", "diff-cover (>=6.5.1)", 
 type_comments = ["typed-ast (>=1.5.4)"]
 
 [[package]]
+name = "sphinx-click"
+version = "4.3.0"
+description = "Sphinx extension that automatically documents click applications"
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+click = ">=7.0"
+docutils = "*"
+sphinx = ">=2.0"
+
+[[package]]
 name = "sphinxcontrib-applehelp"
 version = "1.0.2"
 description = "sphinxcontrib-applehelp is a sphinx extension which outputs Apple help books"
@@ -698,7 +711,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "a602bdfbf76499cd1134b551b0920a813c0439ebe55b3b12dd50e6e0c60af249"
+content-hash = "362ae842d7a05e54eec8cfe1393ff35429d70ba0c5e429d0a1458e448e52d1a9"
 
 [metadata.files]
 alabaster = [
@@ -1040,6 +1053,10 @@ Sphinx = [
 sphinx-autodoc-typehints = [
     {file = "sphinx_autodoc_typehints-1.19.2-py3-none-any.whl", hash = "sha256:3d761de928d5a86901331133d6d4a2552afa2e798ebcfc0886791792aeb4dd9a"},
     {file = "sphinx_autodoc_typehints-1.19.2.tar.gz", hash = "sha256:872fb2d7b3d794826c28e36edf6739e93549491447dcabeb07c58855e9f914de"},
+]
+sphinx-click = [
+    {file = "sphinx-click-4.3.0.tar.gz", hash = "sha256:bd4db5d3c1bec345f07af07b8e28a76cfc5006d997984e38ae246bbf8b9a3b38"},
+    {file = "sphinx_click-4.3.0-py3-none-any.whl", hash = "sha256:23e85a3cb0b728a421ea773699f6acadefae171d1a764a51dd8ec5981503ccbe"},
 ]
 sphinxcontrib-applehelp = [
     {file = "sphinxcontrib-applehelp-1.0.2.tar.gz", hash = "sha256:a072735ec80e7675e3f432fcae8610ecf509c5f1869d17e2eecff44389cdbc58"},

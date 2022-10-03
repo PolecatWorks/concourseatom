@@ -23,17 +23,17 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.autodoc",
     "sphinx_autodoc_typehints",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",
+    "sphinx_click",
 ]
+
 
 templates_path = ["_templates"]
 exclude_patterns = []
 keep_warnings = True
 todo_include_todos = True
-
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

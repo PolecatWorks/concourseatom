@@ -63,10 +63,24 @@ def read_file(ctx, infile):
 @click.argument(
     "infile1", type=click.File("rb")
 )  # , help="File to load as second file for merge")
-def merge(ctx, infile0, infile1):
+@click.option(
+    "--deep", is_flag=True, help="Attempt to perform a deep merge of parallel elements"
+)
+def merge(ctx, infile0, infile1, deep):
     """
-    Merge concourse jobs expect input from stdin and output in stdout.
-    Optionally provide both input file names as arguments
+    Merge two concourse jobs and resources
+
+    Read input from stdin and named file or from two files.
+
+    Merge will first try to merge the resource types based on the content not on the
+    name.
+    It will identify resources that are identical but with differing names in both files
+    and then create the appropriate rewrites of resource names throughout the
+    configuration.
+
+    TODO: Create an ability to do a deep merge. This will resolve further into the
+    configuration structure and perform merge on the jobs IFF the structures are
+    identical and have equivalent parallel sections.
     """
     if ctx.obj["DEBUG"]:
         click.echo(f"Starting to merge0 {infile0.name}", err=True)

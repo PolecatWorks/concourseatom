@@ -4,26 +4,16 @@ Usage
 Installation
 ------------
 
-To use concourse-merge, first install it via pip:
+To use concourseatom, first install it via pip:
 
 .. code-block:: console
 
-    (.venv) $ pip install concourse-merge
-
-Sample Usage in code
---------------------
-
-Setup a simple Resource
-
->>> from concourseatom import models
->>> models.get_random_ingredients()
-['shells', 'gorgonzola', 'parsley']
+    (.venv) $ pip install concourseatom
 
 
-Usage examples:
+Using command
+-------------
 
->>> 1 + 1
-2
-
-.. todo:: apie
-    Add some more todos here
+.. click:: concourseatom.tools:cli
+   :prog: concmerge
+   :nested: full
