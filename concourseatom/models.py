@@ -58,14 +58,20 @@ class Rewrites(RewriteABC):
             elif any(
                 resource.name == item.name for resource in ret_list
             ):  # Name already used for different item so rename it and then add
+                # If using deep mode then work out the recursive deep merge
+
+                # Get the list of all names in output objects
                 namelist = [resource.name for resource in ret_list]
 
+                # Run through a sequence of numbers to find a number that makes a
+                # unique entry on the output names
                 index_num = 0
                 b_alt_name = f"{item.name}-{index_num:0>3}"
                 while b_alt_name in namelist:
                     index_num += 1
                     b_alt_name = f"{item.name}-{index_num:0>3}"
 
+                # Update the new name with the proposed rewrite name
                 rewrite_map[item.name] = b_alt_name
 
                 ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
@@ -416,7 +422,9 @@ class Pipeline(YamlModel):
         )
 
     @classmethod
-    def merge(cls, pipeline_left: Pipeline, pipeline_right: Pipeline) -> Pipeline:
+    def merge(
+        cls, pipeline_left: Pipeline, pipeline_right: Pipeline, deep: bool = False
+    ) -> Pipeline:
         """Merge two Concourse Plans
 
         Merge will take two Things and create a merge of them.
@@ -428,6 +436,8 @@ class Pipeline(YamlModel):
         :param aThing: Base concourse plan to add second plan to.
         This will be unchanged through merge process
         :param bThing: Secondary plan.
+        :param deep: Deep mode attempts to merge jobs based on name and cooerce merges
+            serial and parallel objects
 
         :Return:
             Merged output from combination of both inputs with minimised
