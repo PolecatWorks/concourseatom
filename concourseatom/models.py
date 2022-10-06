@@ -21,13 +21,17 @@ def get_random_ingredients(kind=None):
     return ["shells", "gorgonzola", "parsley"]
 
 
-class RewriteABC(ABC):
+class StepABC(ABC):
     @abstractmethod
-    def rewrite(self, rewrites: Dict[str, str]) -> RewriteABC:
+    def rewrite(self, rewrites: Dict[str, str]) -> StepABC:
         pass
 
+    def deep_merge(self, other: Rewrites):
+        if self != other:
+            raise Exception(f"deep_merge items MUST be identical: {self} != {other}")
 
-class Rewrites(RewriteABC):
+
+class Rewrites(StepABC):
     def exactEq(self, other: Rewrites) -> bool:
         return self.name == other.name and self == other
 
@@ -36,15 +40,16 @@ class Rewrites(RewriteABC):
 
     @classmethod
     def uniques_and_rewrites(
-        cls, aList: List[Rewrites], bList: List[Rewrites]
+        cls, aList: List[Rewrites], bList: List[Rewrites], deep: bool = False
     ) -> Tuple[List[Rewrites], Dict[str, str]]:
         """
         aList gets priority and copied verbatim
-        If item already exists in aList then create rewrite for that
-        If name already exists in aList then create rewrite for that
+        If item already exists in aList then create rewrite from its name in bList
+        If name already exists in aList then identify a rename and map that rename
+
         capture list of appended items to be added to aList
 
-        return the final list
+        return the final list AND a dict of rewrites
         """
 
         ret_list: List[Rewrites] = aList.copy()
@@ -60,21 +65,34 @@ class Rewrites(RewriteABC):
             ):  # Name already used for different item so rename it and then add
                 # If using deep mode then work out the recursive deep merge
 
-                # Get the list of all names in output objects
-                namelist = [resource.name for resource in ret_list]
+                if deep:
+                    # Note deep is only valid for Job (not Resource or Resource_type)
+                    print(f"Doing a deep merge and working on item called: {item.name}")
+                    target_item = next(
+                        resource for resource in ret_list if resource.name == item.name
+                    )
+                    print(f"Doing deep update to: {type(target_item)} {target_item}")
 
-                # Run through a sequence of numbers to find a number that makes a
-                # unique entry on the output names
-                index_num = 0
-                b_alt_name = f"{item.name}-{index_num:0>3}"
-                while b_alt_name in namelist:
-                    index_num += 1
+                    target_item.deep_merge(item)
+                    # Do not update ret_list via append as items are deep_merged in
+                else:
+
+                    print("Doing shallow copy")
+                    # Get the list of all names in output objects
+                    namelist = [resource.name for resource in ret_list]
+
+                    # Run through a sequence of numbers to find a number that makes a
+                    # unique entry on the output names
+                    index_num = 0
                     b_alt_name = f"{item.name}-{index_num:0>3}"
+                    while b_alt_name in namelist:
+                        index_num += 1
+                        b_alt_name = f"{item.name}-{index_num:0>3}"
 
-                # Update the new name with the proposed rewrite name
-                rewrite_map[item.name] = b_alt_name
+                    # Update the new name with the proposed rewrite name
+                    rewrite_map[item.name] = b_alt_name
 
-                ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
+                    ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
             else:  # Item is unique so add it
                 rewrite_map[item.name] = item.name
                 ret_list.append(item.copy(deep=True))
@@ -208,7 +226,7 @@ class TaskConfig(YamlModel):
     container_limits: Optional[Container_limits] = None
 
 
-class Task(YamlModel, RewriteABC):
+class Task(YamlModel, StepABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -244,7 +262,7 @@ class Task(YamlModel, RewriteABC):
         )
 
 
-class Get(YamlModel, RewriteABC):
+class Get(YamlModel, StepABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = Field(default_factory=list)
@@ -259,8 +277,12 @@ class Get(YamlModel, RewriteABC):
     def rewrite(self, rewrites: Dict[str, str]) -> Get:
         return self.copy(deep=True, update={"get": rewrites[self.get]})
 
+    def deep_merge(self, other: Rewrites):
+        if self != other:
+            raise Exception("Default deep_merge process just checks identicial")
 
-class Put(YamlModel, RewriteABC):
+
+class Put(YamlModel, StepABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -275,7 +297,7 @@ class Put(YamlModel, RewriteABC):
         return self.copy(deep=True, update={"put": rewrites[self.put]})
 
 
-class Do(YamlModel, RewriteABC):
+class Do(YamlModel, StepABC):
     do: List[Step]
 
     def rewrite(self, rewrites: Dict[str, str]) -> Do:
@@ -284,7 +306,7 @@ class Do(YamlModel, RewriteABC):
         )
 
 
-class In_parallel(YamlModel, RewriteABC):
+class In_parallel(YamlModel, StepABC):
     steps: List[Step] = Field(default_factory=list)
     limit: Optional[int] = None
     fail_fast: bool = False
@@ -293,6 +315,12 @@ class In_parallel(YamlModel, RewriteABC):
         return self.copy(
             deep=True, update={"steps": [step.rewrite(rewrites) for step in self.steps]}
         )
+
+    def deep_merge(self, other: In_parallel):
+        # For every item in the add it if it does not already exist
+        for newitem in other.steps:
+            if newitem not in self.steps:
+                self.steps.append(newitem)
 
 
 Step = Union[Get, Put, Task, In_parallel, Do]
@@ -363,6 +391,27 @@ class Job(YamlModel, Rewrites):
                 "ensure": self.ensure.rewrite(rewrites) if self.ensure else None,
             },
         )
+
+    def deep_merge(self, other: Job):
+
+        # Check rules before we attempt the deep_merge
+        if (
+            self.on_abort != other.on_abort
+            or self.on_error != other.on_error
+            or self.on_failure != other.on_failure
+            or self.on_success != other.on_success
+        ):
+            raise Exception("Cannot merge job if different on_ tasks")
+
+        # if we have anything but in_parallel then these must be identical
+        if len(self.plan) != len(other.plan):
+            raise Exception("deep_merge only when plans are same length")
+
+        for selfPlan, otherPlan in zip(self.plan, other.plan):
+            print(f"DEEP_MERGING: {selfPlan} {otherPlan}")
+            selfPlan.deep_merge(otherPlan)
+
+        # iamhere
 
 
 class Pipeline(YamlModel):
@@ -464,6 +513,8 @@ class Pipeline(YamlModel):
 
         bThing_jobs = Job.rewrites(pipeline_right.jobs, resource_rewrites)
 
-        jobs, job_rewrites = Job.uniques_and_rewrites(pipeline_left.jobs, bThing_jobs)
+        jobs, job_rewrites = Job.uniques_and_rewrites(
+            pipeline_left.jobs, bThing_jobs, deep
+        )
 
         return Pipeline(resource_types=resource_types, resources=resources, jobs=jobs)

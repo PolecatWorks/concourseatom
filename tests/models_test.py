@@ -153,6 +153,72 @@ def test_ResourceType_uniques_rewrites(
     assert rewrites == expected_rewrites
 
 
+@pytest.mark.parametrize(
+    "list_left, list_right,expected_uniques, expected_rewrites",
+    [
+        ([], [], [], {}),  # Empty
+        (  # Map to existing
+            [
+                Job(
+                    name="a",
+                    plan=[
+                        Get(get="b", resource="c"),
+                        In_parallel(
+                            steps=[
+                                Get(get="c", resource="d"),
+                            ]
+                        ),
+                        Put(put="g", resource="h"),
+                    ],
+                )
+            ],
+            [
+                Job(
+                    name="a",
+                    plan=[
+                        Get(get="b", resource="c"),
+                        In_parallel(
+                            steps=[
+                                Get(get="e", resource="f"),
+                            ]
+                        ),
+                        Put(put="g", resource="h"),
+                    ],
+                ),
+            ],
+            [
+                Job(
+                    name="a",
+                    plan=[
+                        Get(get="b", resource="c"),
+                        In_parallel(
+                            steps=[
+                                Get(get="c", resource="d"),
+                                Get(get="e", resource="f"),
+                            ]
+                        ),
+                        Put(put="g", resource="h"),
+                    ],
+                ),
+            ],
+            {
+                # "a": "a",
+            },
+        ),
+    ],
+)
+def test_ResourceType_uniques_rewrites_deep(
+    list_left, list_right, expected_uniques, expected_rewrites
+):
+    uniques, rewrites = ResourceType.uniques_and_rewrites(
+        list_left, list_right, deep=True
+    )
+
+    assert uniques == expected_uniques
+    assert all(u.exactEq(eu) for u, eu in zip(uniques, expected_uniques))
+    assert rewrites == expected_rewrites
+
+
 def test_Resource():
     test0 = Resource(name="a", type="b", source={})
     assert test0 == Resource(name="a", type="b", source={})
