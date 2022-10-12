@@ -1,3 +1,4 @@
+# concourseatom Copyright (C) 2022 Ben Greene
 """Data models for working with concourse data obejects
 """
 

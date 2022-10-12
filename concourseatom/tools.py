@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# concourseatom Copyright (C) 2022 Ben Greene
 """CLI tools for working with concourse objects
 """
 import sys
@@ -32,6 +33,12 @@ def interactivedebugger(type, value, tb):
 def cli(ctx, debug):
     """
     Simple concourse manaagement functions
+
+    concourseatom Copyright (C) 2022 Ben Greene
+
+    This program comes with ABSOLUTELY NO WARRANTY.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; See LICENSE file for details.
     """
     ctx.ensure_object(dict)
 
@@ -78,9 +85,6 @@ def merge(ctx, infile0, infile1, deep):
     and then create the appropriate rewrites of resource names throughout the
     configuration.
 
-    TODO: Create an ability to do a deep merge. This will resolve further into the
-    configuration structure and perform merge on the jobs IFF the structures are
-    identical and have equivalent parallel sections.
     """
     if ctx.obj["DEBUG"]:
         click.echo(f"Starting to merge0 {infile0.name}", err=True)

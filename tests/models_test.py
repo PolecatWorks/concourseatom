@@ -1,3 +1,4 @@
+# concourseatom Copyright (C) 2022 Ben Greene
 """Test functions for Concourse data models
 """
 from contextlib import nullcontext as does_not_raise
