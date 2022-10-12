@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "Read Concourse Pipelines and intelligently allowing pipelines to be built from snipits"
 authors = ["Ben Greene <BenJGreene@gmail.com>"]
 readme = "README.md"
+license = "GPL3"
+repository = "https://github.com/PolecatWorks/concourseatom"
+include = [
+    "LICENSE",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
