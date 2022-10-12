@@ -20,6 +20,7 @@ flake8 = "^5.0.4"
 flake8-black = "^0.3.3"
 pylint = "^2.15.3"
 sphinx-click = "^4.3.0"
+pytest-click = "^1.1.0"
 
 
 [build-system]
