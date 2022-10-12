@@ -1,7 +1,7 @@
-tools module
-============
+Tools
+=====
 
-.. automodule:: concourse.tools
+.. automodule:: concourseatom.tools
    :members:
    :undoc-members:
    :show-inheritance:

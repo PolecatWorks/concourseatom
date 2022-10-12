@@ -1,3 +1,5 @@
+.coverage
+cov.xml
 .vscode
 venv
 __pycache__

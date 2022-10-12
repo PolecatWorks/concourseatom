@@ -1,0 +1,39 @@
+resource_types:
+- name: git
+  type: blue
+resources:
+- name: concourse-docs-git
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/concourse/docs
+jobs:
+- name: job
+  public: true
+  plan:
+  - get: concourse-docs-git
+    trigger: true
+  - task: list-files
+    config:
+      inputs:
+        - name: concourse-docs-git
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: { repository: busybox }
+      run:
+        path: ls
+        args: ["-la", "./concourse-docs-git"]
+  - task: list-files
+    config:
+      inputs:
+        - name: concourse-docs-gitpy
+      platform: linux
+      image_resource:
+        type: registry-image
+        source: { repository: busybox }
+      run:
+        path: ls
+        args:
+        - -la
+        - ./concourse-docs-git
