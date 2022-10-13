@@ -6,6 +6,7 @@ PYTEST := venv/bin/pytest
 FLAKE8 := venv/bin/flake8
 BLACK  := venv/bin/black
 PYLINT := venv/bin/pylint
+POETRY := venv/bin/poetry
 DETECT_SECRETS := venv/bin/detect-secrets
 
 
@@ -21,7 +22,9 @@ info:
 
 venv:
 	python3 -m venv venv
-	$(PIP) install -r requirements.txt
+	$(PIP) install poetry
+	$(POETRY) install --with dev
+	$(PIP) install -e .[dev]
 
 test:
 	$(PYTEST) ${PYTEST_ARGS}

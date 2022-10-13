@@ -21,6 +21,10 @@ Check out the :doc:`usage` section for further information.
    api
    todo
 
+Copyright
+=======
+Copyright (C) 2022 Ben Greene
+
 
 
 Indices and tables
