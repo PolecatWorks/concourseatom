@@ -6,7 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod  # This enables forward reference of types
 from typing import Any, Dict, Optional, List, Tuple, Union
 
-from pydantic import Field
+from pydantic import Field, validator
 from pydantic_yaml import YamlModel
 
 
@@ -141,8 +141,7 @@ class ResourceType(YamlModel, Rewrites):
         return self.type < other.type
 
 
-class Resource(YamlModel, Rewrites):
-    name: str
+class ResourceUnnamed(YamlModel, Rewrites):
     type: str
     source: Dict[str, Any]
     old_name: Optional[str] = None
@@ -178,6 +177,10 @@ class Resource(YamlModel, Rewrites):
 
     def __lt__(self, other):
         return self.type < other.type
+
+
+class Resource(ResourceUnnamed):
+    name: str
 
 
 class Command(YamlModel):
@@ -226,7 +229,7 @@ class Container_limits(YamlModel):
 class TaskConfig(YamlModel):
     platform: str
     run: Command
-    image_resource: Optional[Resource] = None
+    image_resource: Optional[ResourceUnnamed] = None
     inputs: List[Input] = Field(default_factory=list)
     outputs: List[Output] = Field(default_factory=list)
     caches: List[Cache] = Field(default_factory=list)
@@ -263,17 +266,21 @@ class Task(YamlModel, StepABC):
 
         return self.copy(
             deep=True,
-            update={
-                "input_mapping": {
-                    input.name: resource_rewrites[input.name]
-                    for input in self.config.inputs
-                },
-                "output_mapping": {
-                    output.name: resource_rewrites[output.name]
-                    for output in self.config.outputs
-                },
-            },
         )
+
+        # return self.copy(
+        #     deep=True,
+        #     update={
+        #         "input_mapping": {
+        #             input.name: resource_rewrites[input.name]
+        #             for input in self.config.inputs
+        #         },
+        #         "output_mapping": {
+        #             output.name: resource_rewrites[output.name]
+        #             for output in self.config.outputs
+        #         },
+        #     },
+        # )
 
 
 class Get(YamlModel, StepABC):
@@ -343,9 +350,25 @@ class Do(YamlModel, StepABC):
 
 
 class In_parallel(YamlModel, StepABC):
-    steps: List[Step] = Field(default_factory=list)
-    limit: Optional[int] = None
-    fail_fast: bool = False
+    class Config(YamlModel):
+        steps: List[Step] = Field(default_factory=list)
+        limit: Optional[int] = None
+        fail_fast: bool = False
+
+    in_parallel: Union[In_parallel.Config, List[Step]]
+    # ToDo: Consider to provide in_parallel as a Union[List[Step], In_parallel.Config]
+
+    @validator("in_parallel")
+    def cooerce_in_parallel_to_verbose(cls, value):
+        if not isinstance(value, In_parallel.Config):
+            return In_parallel.Config(steps=value)
+        return value
+
+    # def __post_init_post_parse__(self, in_parallel):
+    #     # If provided in shortened form then force to verbose form
+    #     if not isinstance(in_parallel, In_parallel.Config):
+    #         self.in_parallel = In_parallel.Config(steps=self.in_parallel)
+    #     bark
 
     def resource_rewrite(
         self,
@@ -354,23 +377,30 @@ class In_parallel(YamlModel, StepABC):
         return self.copy(
             deep=True,
             update={
-                "steps": [
-                    step.resource_rewrite(resource_rewrites) for step in self.steps
-                ]
+                "in_parallel": self.in_parallel.copy(
+                    deep=True,
+                    update={
+                        "steps": [
+                            step.resource_rewrite(resource_rewrites)
+                            for step in self.in_parallel.steps
+                        ]
+                    },
+                ),
             },
         )
 
     def deep_merge(self, other: In_parallel):
         # For every item in the add it if it does not already exist
-        for newitem in other.steps:
-            if newitem not in self.steps:
-                self.steps.append(newitem)
+        for newitem in other.in_parallel.steps:
+            if newitem not in self.in_parallel.steps:
+                self.in_parallel.steps.append(newitem)
 
 
 Step = Union[Get, Put, Task, In_parallel, Do]
 
 Do.update_forward_refs()
 In_parallel.update_forward_refs()
+In_parallel.Config.update_forward_refs()
 
 
 class LogRetentionPolicy(YamlModel):
@@ -549,7 +579,7 @@ class Pipeline(YamlModel):
         It will resolve shared resources and map into a single name.
         It will resolve different resources with same name into discrete resourcess.
         The secondary plan be modified in naming, but not in function during the merge
-        to achinve minimal :class:`Resource` s and :class:`ResourceType` s.
+        to achieve minimal :class:`Resource` s and :class:`ResourceType` s.
 
         :param aThing: Base concourse plan to add second plan to.
         This will be unchanged through merge process

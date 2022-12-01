@@ -165,9 +165,11 @@ def test_ResourceType_uniques_rewrites(
                     plan=[
                         Get(get="b", resource="c"),
                         In_parallel(
-                            steps=[
-                                Get(get="c", resource="d"),
-                            ]
+                            in_parallel=In_parallel.Config(
+                                steps=[
+                                    Get(get="c", resource="d"),
+                                ]
+                            )
                         ),
                         Put(put="g", resource="h"),
                     ],
@@ -179,9 +181,11 @@ def test_ResourceType_uniques_rewrites(
                     plan=[
                         Get(get="b", resource="c"),
                         In_parallel(
-                            steps=[
-                                Get(get="e", resource="f"),
-                            ]
+                            in_parallel=In_parallel.Config(
+                                steps=[
+                                    Get(get="e", resource="f"),
+                                ]
+                            )
                         ),
                         Put(put="g", resource="h"),
                     ],
@@ -193,10 +197,12 @@ def test_ResourceType_uniques_rewrites(
                     plan=[
                         Get(get="b", resource="c"),
                         In_parallel(
-                            steps=[
-                                Get(get="c", resource="d"),
-                                Get(get="e", resource="f"),
-                            ]
+                            in_parallel=In_parallel.Config(
+                                steps=[
+                                    Get(get="c", resource="d"),
+                                    Get(get="e", resource="f"),
+                                ]
+                            )
                         ),
                         Put(put="g", resource="h"),
                     ],
@@ -256,6 +262,17 @@ def test_Resource():
     assert test0 == test1
 
 
+def test_in_parallel():
+    short_form = """
+      in_parallel:
+      - get: a
+      """
+
+    test0 = In_parallel.parse_raw(short_form)
+
+    assert isinstance(test0.in_parallel, In_parallel.Config)
+
+
 @pytest.mark.parametrize(
     "myObj,rewrites,output, expectation",
     [
@@ -271,15 +288,17 @@ def test_Resource():
             does_not_raise(),
         ),
         (
-            In_parallel(In_parallel=[]),
+            In_parallel(in_parallel=In_parallel.Config(steps=[])),
             {},
-            In_parallel(In_parallel=[]),
+            In_parallel(in_parallel=In_parallel.Config(steps=[])),
             does_not_raise(),
         ),
         (
-            In_parallel(in_parallel=[Put(put="a")]),
+            In_parallel(in_parallel=In_parallel.Config(steps=[Put(put="a")])),
             {"a": "a"},
-            In_parallel(in_parallel=[Put(put="a")]),
+            In_parallel(
+                in_parallel=In_parallel.Config(steps=[Put(put="a", resource="a")])
+            ),
             does_not_raise(),
         ),
         (
@@ -307,7 +326,7 @@ def test_Resource():
                 config=TaskConfig(
                     platform="linux", run=Command(path="sh"), inputs=[Input(name="a")]
                 ),
-                input_mapping={"a": "a"},
+                # input_mapping={"a": "a"},
             ),
             does_not_raise(),
         ),
@@ -324,7 +343,7 @@ def test_Resource():
                 config=TaskConfig(
                     platform="linux", run=Command(path="sh"), outputs=[Output(name="a")]
                 ),
-                output_mapping={"a": "a"},
+                # output_mapping={"a": "a"},
             ),
             does_not_raise(),
         ),
@@ -440,7 +459,6 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
             """
                 platform: a
                 image_resource:
-                  name: a
                   type: b
                   source: {}
                 run:
@@ -466,7 +484,6 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
                 config:
                   platform: str
                   image_resource:
-                    name: b
                     type: c
                     source: {}
                   run:
@@ -522,10 +539,18 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         (
             In_parallel,
             """
-                steps:
+                in_parallel:
+                  steps:
+                  - get: a
+                  limit: 1
+                  fail_fast: True
+            """,
+        ),
+        (  # Shortended form
+            In_parallel,
+            """
+                in_parallel:
                 - get: a
-                limit: 1
-                fail_fast: True
             """,
         ),
         (
@@ -659,7 +684,7 @@ def test_Job():
             jobs: []
             """,
         ),
-        (  # Merge identical values
+        (  # Merge identical resource_types
             """
             resource_types:
             - name: a
@@ -682,7 +707,7 @@ def test_Job():
             jobs: []
             """,
         ),
-        (  # Merge identical types (priorities name to be LHS)
+        (  # Merge equal resource_types (priorities name to be LHS)
             """
             resource_types:
             - name: a
@@ -730,7 +755,7 @@ def test_Job():
             jobs: []
             """,
         ),
-        (  # Merge XXXXXX
+        (  # apply merge to resources and jobs
             """
             resource_types:
             - name: a
@@ -785,6 +810,237 @@ def test_Job():
                 resource: g-000
             """,
         ),
+        (  # task merged
+            """
+          resource_types: []
+          resources: []
+          jobs: []
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: d
+          - name: b
+            type: d
+            source:
+              b: c
+          - name: c
+            type: d
+            source:
+              c: d
+          jobs:
+          - name: a
+            plan:
+            - task: a
+              config:
+                platform: linux
+                run:
+                  path: hello
+                inputs:
+                - name: a
+                - name: b
+                outputs:
+                - name: c
+                - name: a
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: d
+          - name: b
+            type: d
+            source:
+              b: c
+          - name: c
+            type: d
+            source:
+              c: d
+          jobs:
+          - name: a
+            plan:
+            - task: a
+              config:
+                platform: linux
+                run:
+                  path: hello
+                inputs:
+                - name: a
+                - name: b
+                outputs:
+                - name: c
+                - name: a
+          """,
+        ),
+        (  # Test in_parallel merge
+            """
+          resource_types: []
+          resources: []
+          jobs: []
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: d
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: d
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+                  resource: a
+          """,
+        ),
+        (  # Test in_parallel merge where two sources different jobs names and content
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: b
+            plan:
+            - in_parallel:
+                steps:
+                - get: b
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          - name: b
+            plan:
+            - in_parallel:
+                steps:
+                - get: b
+                  resource: b
+          """,
+        ),
+        (  # Test in_parallel merge where two sources same jobs names and differ content
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: b
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          - name: a-000
+            plan:
+            - in_parallel:
+                steps:
+                - get: b
+                  resource: b
+          """,
+        ),
     ],
 )
 def test_merge_pipelines(yaml_l, yaml_r, yaml_merged):
@@ -795,6 +1051,99 @@ def test_merge_pipelines(yaml_l, yaml_r, yaml_merged):
     merged_expected = Pipeline.parse_raw(dedent(yaml_merged))
 
     merged = Pipeline.merge(test_l, test_r)
+
+    print(merged.yaml())
+
+    assert merged_expected == merged
+    assert merged_expected.exactEq(merged)
+
+
+@pytest.mark.parametrize(
+    "yaml_l, yaml_r, yaml_merged",
+    [
+        (  # Empty content merge
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+            """
+            resource_types: []
+            resources: []
+            jobs: []
+            """,
+        ),
+        (  # Test in_parallel merge where two sources same jobs names and differ content
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: b
+          """,
+            """
+          resource_types:
+          - name: d
+            type: e
+          resources:
+          - name: a
+            type: d
+            source:
+              a: a
+          - name: b
+            type: d
+            source:
+              a: b
+          jobs:
+          - name: a
+            plan:
+            - in_parallel:
+                steps:
+                - get: a
+                - get: b
+                  resource: b
+          """,
+        ),
+    ],
+)
+def test_merge_pipelines_deep(yaml_l, yaml_r, yaml_merged):
+
+    test_l = Pipeline.parse_raw(dedent(yaml_l))
+    test_r = Pipeline.parse_raw(dedent(yaml_r))
+
+    merged_expected = Pipeline.parse_raw(dedent(yaml_merged))
+
+    merged = Pipeline.merge(test_l, test_r, deep=True)
 
     print(merged.yaml())
 
@@ -911,7 +1260,9 @@ def test_Pipeline_load():
             config:
               platform: o
               image_resource:
-                p: q
+                type: registry
+                source:
+                  apple: pie
               run:
                 path: r
                 args:
@@ -919,13 +1270,13 @@ def test_Pipeline_load():
                 dir: t
                 user: v
               inputs:
-              - w
+              - name: w
               outputs:
-              - x
+              - name: x
               caches:
-              - y
+              - path: y
               params:
-              - z
+                z: z1
               rootfs_uri: a1
               container_limits:
                 cpu: 1
