@@ -24,7 +24,7 @@ def get_random_ingredients(kind=None):
 
 class StepABC(ABC):
     @abstractmethod
-    def rewrite(self, rewrites: Dict[str, str]) -> StepABC:
+    def resource_rewrite(self, rewrites: Dict[str, str]) -> StepABC:
         pass
 
     def deep_merge(self, other: Rewrites):
@@ -50,15 +50,15 @@ class Rewrites(StepABC):
 
         capture list of appended items to be added to aList
 
-        return the final list AND a dict of rewrites
+        return the final list AND a dict of resource_rewrites and handle_rewrites
         """
 
         ret_list: List[Rewrites] = aList.copy()
-        rewrite_map: Dict[str, str] = {}
+        resource_rewrite_map: Dict[str, str] = {}
 
         for item in bList:
             if item in ret_list:  # Item already exists so map it
-                rewrite_map[item.name] = next(
+                resource_rewrite_map[item.name] = next(
                     obj.name for obj in ret_list if obj == item
                 )
             elif any(
@@ -91,21 +91,23 @@ class Rewrites(StepABC):
                         b_alt_name = f"{item.name}-{index_num:0>3}"
 
                     # Update the new name with the proposed rewrite name
-                    rewrite_map[item.name] = b_alt_name
+                    resource_rewrite_map[item.name] = b_alt_name
 
                     ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
             else:  # Item is unique so add it
-                rewrite_map[item.name] = item.name
+                resource_rewrite_map[item.name] = item.name
                 ret_list.append(item.copy(deep=True))
 
-        return ret_list, rewrite_map
+        return ret_list, resource_rewrite_map
 
     @classmethod
     def rewrites(
-        cls, in_list: List[Rewrites], rewrites: Dict[str, str]
+        cls,
+        in_list: List[Rewrites],
+        resource_rewrites: Dict[str, str],
     ) -> List[Rewrites]:
         """Apply rewrite pattern to type parameter"""
-        return [resource.rewrite(rewrites) for resource in in_list]
+        return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
 
 
 class ResourceType(YamlModel, Rewrites):
@@ -129,8 +131,11 @@ class ResourceType(YamlModel, Rewrites):
             and self.defaults == other.defaults
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> ResourceType:
-        return self.copy(deep=True, update={"type": rewrites[self.type]})
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> ResourceType:
+        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
 
     def __lt__(self, other):
         return self.type < other.type
@@ -165,8 +170,11 @@ class Resource(YamlModel, Rewrites):
             and self.webhook_token == other.webhook_token
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Resource:
-        return self.copy(deep=True, update={"type": rewrites[self.type]})
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Resource:
+        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
 
     def __lt__(self, other):
         return self.type < other.type
@@ -244,7 +252,10 @@ class Task(YamlModel, StepABC):
     input_mapping: Dict[str, str] = Field(default_factory=dict)
     output_mapping: Dict[str, str] = Field(default_factory=dict)
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Get:
         if not self.config:
             raise Exception(f"Task needs config for {self}")
         if self.file:
@@ -254,10 +265,12 @@ class Task(YamlModel, StepABC):
             deep=True,
             update={
                 "input_mapping": {
-                    input.name: rewrites[input.name] for input in self.config.inputs
+                    input.name: resource_rewrites[input.name]
+                    for input in self.config.inputs
                 },
                 "output_mapping": {
-                    output.name: rewrites[output.name] for output in self.config.outputs
+                    output.name: resource_rewrites[output.name]
+                    for output in self.config.outputs
                 },
             },
         )
@@ -271,12 +284,20 @@ class Get(YamlModel, StepABC):
     trigger: bool = False
     version: str = "latest"
 
+    def effective_resource(self):
+        return self.resource if self.resource else self.get
+
     def __post_init__(self):
         if not self.resource:
             self.resource = self.get
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return self.copy(deep=True, update={"get": rewrites[self.get]})
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Get:
+        return self.copy(
+            deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
+        )
 
     def deep_merge(self, other: Rewrites):
         if self != other:
@@ -294,16 +315,30 @@ class Put(YamlModel, StepABC):
         if not self.resource:
             self.resource = self.put
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Put:
-        return self.copy(deep=True, update={"put": rewrites[self.put]})
+    def effective_resource(self):
+        return self.resource if self.resource else self.put
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Put:
+        return self.copy(
+            deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
+        )
 
 
 class Do(YamlModel, StepABC):
     do: List[Step]
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Do:
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Do:
         return self.copy(
-            deep=True, update={"do": [step.rewrite(rewrites) for step in self.do]}
+            deep=True,
+            update={
+                "do": [step.resource_rewrite(resource_rewrites) for step in self.do]
+            },
         )
 
 
@@ -312,9 +347,17 @@ class In_parallel(YamlModel, StepABC):
     limit: Optional[int] = None
     fail_fast: bool = False
 
-    def rewrite(self, rewrites: Dict[str, str]) -> In_parallel:
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> In_parallel:
         return self.copy(
-            deep=True, update={"steps": [step.rewrite(rewrites) for step in self.steps]}
+            deep=True,
+            update={
+                "steps": [
+                    step.resource_rewrite(resource_rewrites) for step in self.steps
+                ]
+            },
         )
 
     def deep_merge(self, other: In_parallel):
@@ -376,20 +419,31 @@ class Job(YamlModel, Rewrites):
             and self.interruptible == other.interruptible
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Job:
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Job:
         return self.copy(
             deep=True,
             update={
-                "plan": [step.rewrite(rewrites) for step in self.plan],
-                "on_success": self.on_success.rewrite(rewrites)
+                "plan": [
+                    step.resource_rewrite(resource_rewrites) for step in self.plan
+                ],
+                "on_success": self.on_success.resource_rewrite(resource_rewrites)
                 if self.on_success
                 else None,
-                "on_failure": self.on_failure.rewrite(rewrites)
+                "on_failure": self.on_failure.resource_rewrite(resource_rewrites)
                 if self.on_failure
                 else None,
-                "on_error": self.on_error.rewrite(rewrites) if self.on_error else None,
-                "on_abort": self.on_abort.rewrite(rewrites) if self.on_abort else None,
-                "ensure": self.ensure.rewrite(rewrites) if self.ensure else None,
+                "on_error": self.on_error.resource_rewrite(resource_rewrites)
+                if self.on_error
+                else None,
+                "on_abort": self.on_abort.resource_rewrite(resource_rewrites)
+                if self.on_abort
+                else None,
+                "ensure": self.ensure.resource_rewrite(resource_rewrites)
+                if self.ensure
+                else None,
             },
         )
 
@@ -412,7 +466,21 @@ class Job(YamlModel, Rewrites):
             print(f"DEEP_MERGING: {selfPlan} {otherPlan}")
             selfPlan.deep_merge(otherPlan)
 
-        # iamhere
+    @classmethod
+    def rewrites(
+        cls,
+        in_list: List[Rewrites],
+        resource_rewrites: Dict[str, str],
+    ) -> List[Rewrites]:
+        """Apply rewrite pattern to type parameter"""
+        return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
+
+    @classmethod
+    def handle_rewrites(
+        cls, jobs_left: List[Job], jobs_right: List[Job]
+    ) -> Dict[str, str]:
+        print("NEED TO DO THIS")
+        return {}
 
 
 class Pipeline(YamlModel):
@@ -500,22 +568,45 @@ class Pipeline(YamlModel):
         if not pipeline_right.validate():
             raise Exception(f"pipeline_right is not valid: {pipeline_right}")
 
-        resource_types, resource_types_rewrites = ResourceType.uniques_and_rewrites(
+        # set of resource_types from merge and rewrites of resources to achieve this
+        (
+            resource_types,
+            resource_types_right_rewrites,
+        ) = ResourceType.uniques_and_rewrites(
             pipeline_left.resource_types, pipeline_right.resource_types
         )
 
-        bThing_resource_renames = Resource.rewrites(
-            pipeline_right.resources, resource_types_rewrites
+        # resource_types updated for resources from RHS
+        resources_right_rewritten = Resource.rewrites(
+            pipeline_right.resources, resource_types_right_rewrites
         )
 
-        resources, resource_rewrites = Resource.uniques_and_rewrites(
-            pipeline_left.resources, bThing_resource_renames
+        # Unique resources and rewrites to achieve this
+        resources, resources_right_rewrites = Resource.uniques_and_rewrites(
+            pipeline_left.resources, resources_right_rewritten
         )
 
-        bThing_jobs = Job.rewrites(pipeline_right.jobs, resource_rewrites)
+        # NOT WHAT NEXT
+        # 1. Update RHS with all resource rewrites ????
+        #      if RHS is get/put then can keep handle as is and modify the resource it
+        #      points to SO all handles stay same.
+        #      No need to modify ANY handles (ie gets/puts are only interfaces to
+        #      resources so these solve all updates of resources)
+        # 2. If we also do deep merge then we can (inside parallel steps) add more
+        #      handles and result in handle collision.
+        #      To solve this we identify the uniques and renames of handles through
+        #      merges (ONLY when job names match) and then we generate
+        #      the set of handle uniques and renames needed for RHS.
 
-        jobs, job_rewrites = Job.uniques_and_rewrites(
-            pipeline_left.jobs, bThing_jobs, deep
+        jobs_right_rewritten = Job.rewrites(
+            pipeline_right.jobs, resources_right_rewrites
+        )
+
+        # for each job in rhs consider to add it based on being net new OR with handle
+        # rewrites internal to it (handle rewrites are only scoped to the job at hand)
+
+        jobs, jobs_right_rewrites = Job.uniques_and_rewrites(
+            pipeline_left.jobs, jobs_right_rewritten, deep
         )
 
         return Pipeline(resource_types=resource_types, resources=resources, jobs=jobs)

@@ -83,7 +83,7 @@ def test_merge_cli(cli_runner, request, filename0, filename1):
     print(f"Merge data0 = {file0}")
     print(f"Merge data1 = {file1}")
 
-    result = cli_runner.invoke(cli, ['merge', file0, file1])
+    result = cli_runner.invoke(cli, ["merge", file0, file1])
 
     print(result)
     assert result.exit_code == 0

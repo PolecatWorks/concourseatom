@@ -259,12 +259,17 @@ def test_Resource():
 @pytest.mark.parametrize(
     "myObj,rewrites,output, expectation",
     [
-        (Get(get="a"), {"a": "a"}, Get(get="a"), does_not_raise()),
-        (Get(get="a"), {"a": "b"}, Get(get="b", type="a"), does_not_raise()),
-        (Put(put="a"), {"a": "a"}, Put(put="a"), does_not_raise()),
-        (Put(put="a"), {"a": "b"}, Put(put="b", type="a"), does_not_raise()),
+        (Get(get="a"), {"a": "a"}, Get(get="a", resource="a"), does_not_raise()),
+        (Get(get="a"), {"a": "b"}, Get(get="a", resource="b"), does_not_raise()),
+        (Put(put="a"), {"a": "a"}, Put(put="a", resource="a"), does_not_raise()),
+        (Put(put="a"), {"a": "b"}, Put(put="a", resource="b"), does_not_raise()),
         (Do(do=[]), {}, Do(do=[]), does_not_raise()),
-        (Do(do=[Put(put="a")]), {"a": "a"}, Do(do=[Put(put="a")]), does_not_raise()),
+        (
+            Do(do=[Put(put="a")]),
+            {"a": "a"},
+            Do(do=[Put(put="a", resource="a")]),
+            does_not_raise(),
+        ),
         (
             In_parallel(In_parallel=[]),
             {},
@@ -327,7 +332,7 @@ def test_Resource():
 )
 def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation):
     with expectation:
-        assert output == myObj.rewrite(rewrites)
+        assert output == myObj.resource_rewrite(rewrites)
 
 
 @pytest.mark.parametrize(
@@ -774,8 +779,10 @@ def test_Job():
               - put: g
             - name: l
               plan:
-              - get: g-000
-              - put: g-000
+              - get: g
+                resource: g-000
+              - put: g
+                resource: g-000
             """,
         ),
     ],
