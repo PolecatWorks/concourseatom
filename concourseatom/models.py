@@ -571,7 +571,7 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
 
     def sort_key(self) -> str:
 
-        return f'{type(self)}:{"".join(sorted(self.in_parallel.steps, key=In_parallel.step_sortkey))}' # noqa
+        return f'{type(self)}:{"".join(sorted(self.in_parallel.steps, key=In_parallel.step_sortkey))}'  # noqa: E501
 
     @classmethod
     def step_sortkey(cls, item: Step) -> str:
