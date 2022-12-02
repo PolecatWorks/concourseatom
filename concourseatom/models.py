@@ -6,8 +6,21 @@ from __future__ import annotations
 from abc import ABC, abstractmethod  # This enables forward reference of types
 from typing import Any, Dict, Optional, List, Tuple, Union
 
-from pydantic import Field
+from pydantic import Field, root_validator
 from pydantic_yaml import YamlModel
+
+
+def get_uniquename(name: str, namelist: List[str]) -> str:
+    """get a unique name to add to the list based on its original name and
+    incrementing the counter until we hit a unique entry"""
+
+    index_num = 0
+    b_alt_name = f"{name}-{index_num:0>3}"
+    while b_alt_name in namelist:
+        index_num += 1
+        b_alt_name = f"{name}-{index_num:0>3}"
+
+    return b_alt_name
 
 
 def get_random_ingredients(kind=None):
@@ -23,26 +36,54 @@ def get_random_ingredients(kind=None):
 
 
 class StepABC(ABC):
+    """ABC for Step class
+    Step class represents objects of type step used by concourse plans
+    """
+
     @abstractmethod
-    def rewrite(self, rewrites: Dict[str, str]) -> StepABC:
+    def deep_merge(self, other: StepABC) -> StepABC:
+        """
+        If simple step and identical then return a copy of itself else
+        if complex (ie contains others) then do size checks and recurse returning copy
+        """
+        pass
+        # if self != other:
+        #     raise Exception(f"deep_merge items MUST be identical: {self} != {other}")
+        # return self.copy(deep=True)
+
+    @abstractmethod
+    def handles(self) -> List[Tuple[str, str]]:
+        """
+        Recursively get the handles used by the job AND their resource if there
+        is one.
+
+        Returns:
+            List[Tuple[str, str]]: List of handle, resource
+        """
         pass
 
-    def deep_merge(self, other: Rewrites):
-        if self != other:
-            raise Exception(f"deep_merge items MUST be identical: {self} != {other}")
+    @abstractmethod
+    def sort_key(self) -> str:
+        """A sort key to descriminate items of same type"""
+        pass
 
 
-class Rewrites(StepABC):
-    def exactEq(self, other: Rewrites) -> bool:
+class RewritesABC(ABC):
+    @abstractmethod
+    def resource_rewrite(self, resource_rewrites: Dict[str, str]) -> StepABC:
+        pass
+
+    @abstractmethod
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> RewritesABC:
+        pass
+
+    def exactEq(self, other: RewritesABC) -> bool:
         return self.name == other.name and self == other
-
-    def __lt__(self, other):
-        return self.name < other.name
 
     @classmethod
     def uniques_and_rewrites(
-        cls, aList: List[Rewrites], bList: List[Rewrites], deep: bool = False
-    ) -> Tuple[List[Rewrites], Dict[str, str]]:
+        cls, aList: List[RewritesABC], bList: List[RewritesABC], deep: bool = False
+    ) -> Tuple[List[RewritesABC], Dict[str, str]]:
         """
         aList gets priority and copied verbatim
         If item already exists in aList then create rewrite from its name in bList
@@ -50,15 +91,15 @@ class Rewrites(StepABC):
 
         capture list of appended items to be added to aList
 
-        return the final list AND a dict of rewrites
+        return the final list AND a dict of resource_rewrites and handle_rewrites
         """
 
-        ret_list: List[Rewrites] = aList.copy()
-        rewrite_map: Dict[str, str] = {}
+        ret_list: List[RewritesABC] = aList.copy()
+        resource_rewrite_map: Dict[str, str] = {}
 
         for item in bList:
             if item in ret_list:  # Item already exists so map it
-                rewrite_map[item.name] = next(
+                resource_rewrite_map[item.name] = next(
                     obj.name for obj in ret_list if obj == item
                 )
             elif any(
@@ -69,12 +110,75 @@ class Rewrites(StepABC):
                 if deep:
                     # Note deep is only valid for Job (not Resource or Resource_type)
                     print(f"Doing a deep merge and working on item called: {item.name}")
+
+                    # get the item we plan to deep merge in
                     target_item = next(
                         resource for resource in ret_list if resource.name == item.name
                     )
                     print(f"Doing deep update to: {type(target_item)} {target_item}")
 
-                    target_item.deep_merge(item)
+                    target_handles = target_item.handles()
+                    all_handles = item.handles()
+
+                    # parse handles selecting those that are not None first (ie real
+                    # resources)
+                    handles = [
+                        (handle, resource)
+                        for handle, resource in all_handles
+                        if resource is not None
+                    ]
+                    # Find those that are not resources or we have not been used in
+                    # resources
+                    none_handles = [
+                        handle for handle, resource in all_handles if resource is None
+                    ]
+                    # Find those never associatd to a resource
+                    missing_handles = list(
+                        set(none_handles) - set(handle for handle, resource in handles)
+                    )
+                    # Final set is resources AND those never associated to a resource
+                    handles.extend((handle, None) for handle in missing_handles)
+
+                    # ToDo: dedup here
+
+                    handle_rewrites: Dict[str, str] = {}
+                    handle_list = target_handles.copy()
+
+                    for handle in handles:
+                        if handle in handle_list:
+                            # if handle in target and same resource then rewrite to same
+                            # name NOT add to list
+                            handle_rewrites[handle[0]] = handle[0]
+                        elif handle[0] in (
+                            target_handle
+                            for target_handle, target_resource in handle_list
+                        ):
+                            # if handle in target BUT different resource then create
+                            # rewrite of handle
+                            alt_name = get_uniquename(
+                                handle[0],
+                                (
+                                    target_handle
+                                    for target_handle, target_resource in handle_list
+                                ),
+                            )
+                            handle_rewrites[handle[0]] = alt_name
+                            handle_list.append((alt_name, handle[1]))
+                        else:
+                            # else add entry and rewrite to itself
+                            handle_rewrites[handle[0]] = handle[0]
+                            handle_list.append(handle)
+
+                    print(f"Deep job: rewrites={handle_rewrites}")
+                    new_item = item.handle_rewrite(handle_rewrites)
+                    new_target = target_item.deep_merge(new_item)
+
+                    # Replace the target item with the deep_merged update
+                    ret_list.remove(target_item)
+                    ret_list.append(new_target)
+
+                    resource_rewrite_map[item.name] = target_item.name
+                    # print(new_target)
                     # Do not update ret_list via append as items are deep_merged in
                 else:
 
@@ -82,33 +186,29 @@ class Rewrites(StepABC):
                     # Get the list of all names in output objects
                     namelist = [resource.name for resource in ret_list]
 
-                    # Run through a sequence of numbers to find a number that makes a
-                    # unique entry on the output names
-                    index_num = 0
-                    b_alt_name = f"{item.name}-{index_num:0>3}"
-                    while b_alt_name in namelist:
-                        index_num += 1
-                        b_alt_name = f"{item.name}-{index_num:0>3}"
+                    alt_name = get_uniquename(item.name, namelist)
 
                     # Update the new name with the proposed rewrite name
-                    rewrite_map[item.name] = b_alt_name
+                    resource_rewrite_map[item.name] = alt_name
 
-                    ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
+                    ret_list.append(item.copy(deep=True, update={"name": alt_name}))
             else:  # Item is unique so add it
-                rewrite_map[item.name] = item.name
+                resource_rewrite_map[item.name] = item.name
                 ret_list.append(item.copy(deep=True))
 
-        return ret_list, rewrite_map
+        return ret_list, resource_rewrite_map
 
     @classmethod
     def rewrites(
-        cls, in_list: List[Rewrites], rewrites: Dict[str, str]
-    ) -> List[Rewrites]:
+        cls,
+        in_list: List[RewritesABC],
+        resource_rewrites: Dict[str, str],
+    ) -> List[RewritesABC]:
         """Apply rewrite pattern to type parameter"""
-        return [resource.rewrite(rewrites) for resource in in_list]
+        return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
 
 
-class ResourceType(YamlModel, Rewrites):
+class ResourceType(YamlModel, RewritesABC):
     name: str
     type: str
     source: Dict[str, Any] = Field(default_factory=dict)
@@ -129,15 +229,24 @@ class ResourceType(YamlModel, Rewrites):
             and self.defaults == other.defaults
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> ResourceType:
-        return self.copy(deep=True, update={"type": rewrites[self.type]})
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> ResourceType:
+        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
 
     def __lt__(self, other):
-        return self.type < other.type
+        return self.name < other.name
+
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> ResourceType:
+        return self.copy(deep=True, update={"name": handle_rewrites[self.name]})
 
 
-class Resource(YamlModel, Rewrites):
-    name: str
+class ResourceUnnamed(YamlModel):
+    """
+    Class used by Resource and Task
+    """
+
     type: str
     source: Dict[str, Any]
     old_name: Optional[str] = None
@@ -165,11 +274,26 @@ class Resource(YamlModel, Rewrites):
             and self.webhook_token == other.webhook_token
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Resource:
-        return self.copy(deep=True, update={"type": rewrites[self.type]})
-
     def __lt__(self, other):
         return self.type < other.type
+
+
+class Resource(ResourceUnnamed, RewritesABC):
+    name: str
+    # ToDo: is this valid or should this be dropped and jsut use ResourceUnnamed
+    # directly
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> ResourceUnnamed:
+        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
+
+    def __lt__(self, other):
+        return self.name < other.name
+
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> ResourceUnnamed:
+        return self.copy(deep=True, update={"name": handle_rewrites[self.name]})
 
 
 class Command(YamlModel):
@@ -218,7 +342,7 @@ class Container_limits(YamlModel):
 class TaskConfig(YamlModel):
     platform: str
     run: Command
-    image_resource: Optional[Resource] = None
+    image_resource: Optional[ResourceUnnamed] = None
     inputs: List[Input] = Field(default_factory=list)
     outputs: List[Output] = Field(default_factory=list)
     caches: List[Cache] = Field(default_factory=list)
@@ -227,7 +351,7 @@ class TaskConfig(YamlModel):
     container_limits: Optional[Container_limits] = None
 
 
-class Task(YamlModel, StepABC):
+class Task(YamlModel, StepABC, RewritesABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -244,26 +368,61 @@ class Task(YamlModel, StepABC):
     input_mapping: Dict[str, str] = Field(default_factory=dict)
     output_mapping: Dict[str, str] = Field(default_factory=dict)
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        if not self.config:
-            raise Exception(f"Task needs config for {self}")
+    def sort_key(self) -> str:
+        return f"{type(self)}:{self.task}"
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Task:
+        # ToDo: Why do we need these checks
         if self.file:
             raise Exception(f"No support for file in {self}")
 
         return self.copy(
             deep=True,
+        )
+
+    def handle_rewrite(
+        self,
+        handle_rewrites: Dict[str, str],
+    ) -> Task:
+        if not self.config:
+            raise Exception(f"Task needs config for {self}")
+
+        return self.copy(
+            deep=True,
             update={
                 "input_mapping": {
-                    input.name: rewrites[input.name] for input in self.config.inputs
+                    input.name: handle_rewrites[input.name]
+                    for input in self.config.inputs
                 },
                 "output_mapping": {
-                    output.name: rewrites[output.name] for output in self.config.outputs
+                    output.name: handle_rewrites[output.name]
+                    for output in self.config.outputs
                 },
             },
         )
 
+    def handles(self) -> List[Tuple[str, str]]:
+        retval: List[Tuple[str, str]] = []
 
-class Get(YamlModel, StepABC):
+        for handle in self.config.inputs:
+            retval.append((handle.name, None))
+        for handle in self.config.outputs:
+            retval.append((handle.name, None))
+
+        # ToDo: Consider input_mapping and output_mapping also
+
+        return retval
+
+    def deep_merge(self, other: Task) -> Task:
+        if self != other:
+            raise Exception(f"deep_merge Task MUST be identical: {self} != {other}")
+        return self.copy(deep=True)
+
+
+class Get(YamlModel, StepABC, RewritesABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = Field(default_factory=list)
@@ -271,63 +430,229 @@ class Get(YamlModel, StepABC):
     trigger: bool = False
     version: str = "latest"
 
+    def __eq__(self, other: Get) -> bool:
+        return (
+            self.get == other.get
+            and (self.effective_resource() == other.effective_resource())
+            and self.passed == other.passed
+            and self.params == other.params
+            and self.trigger == other.trigger
+            and self.version == other.version
+        )
+
+    def sort_key(self) -> str:
+        return f"{type(self)}:{self.get}"
+
+    def effective_resource(self):
+        return self.resource if self.resource else self.get
+
     def __post_init__(self):
         if not self.resource:
             self.resource = self.get
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Get:
-        return self.copy(deep=True, update={"get": rewrites[self.get]})
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Get:
+        return self.copy(
+            deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
+        )
 
-    def deep_merge(self, other: Rewrites):
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Get:
+        return self.copy(deep=True, update={"get": handle_rewrites[self.get]})
+
+    def deep_merge(self, other: Get) -> Get:
         if self != other:
-            raise Exception("Default deep_merge process just checks identicial")
+            raise Exception(f"deep_merge Get MUST be identical: {self} != {other}")
+        return self.copy(deep=True)
+
+    def handles(self) -> List[Tuple[str, str]]:
+        return [(self.get, self.resource if self.resource else self.get)]
 
 
-class Put(YamlModel, StepABC):
+class Put(YamlModel, StepABC, RewritesABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
     params: Optional[Any] = None
     get_params: Optional[Any] = None
 
+    def __eq__(self, other: Put) -> bool:
+        return (
+            self.put == other.put
+            and (self.effective_resource() == other.effective_resource())
+            and self.inputs == other.inputs
+            and self.params == other.params
+            and self.get_params == other.get_params
+        )
+
+    def sort_key(self) -> str:
+        return f"{type(self)}:{self.put}"
+
     def __post_init__(self):
         if not self.resource:
             self.resource = self.put
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Put:
-        return self.copy(deep=True, update={"put": rewrites[self.put]})
+    def effective_resource(self):
+        return self.resource if self.resource else self.put
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Put:
+        return self.copy(
+            deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
+        )
+
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Put:
+        return self.copy(deep=True, update={"put": handle_rewrites[self.put]})
+
+    def deep_merge(self, other: Put) -> Put:
+        if self != other:
+            raise Exception(f"deep_merge Put MUST be identical: {self} != {other}")
+        return self.copy(deep=True)
+
+    def handles(self) -> List[Tuple[str, str]]:
+        return [(self.put, self.resource if self.resource else self.put)]
 
 
-class Do(YamlModel, StepABC):
+class Do(YamlModel, StepABC, RewritesABC):
     do: List[Step]
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Do:
+    def sort_key(self) -> str:
+        return f'{type(self)}:{"".join(self.do.sort_key())}'
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Do:
         return self.copy(
-            deep=True, update={"do": [step.rewrite(rewrites) for step in self.do]}
+            deep=True,
+            update={
+                "do": [step.resource_rewrite(resource_rewrites) for step in self.do]
+            },
         )
 
-
-class In_parallel(YamlModel, StepABC):
-    steps: List[Step] = Field(default_factory=list)
-    limit: Optional[int] = None
-    fail_fast: bool = False
-
-    def rewrite(self, rewrites: Dict[str, str]) -> In_parallel:
+    def deep_merge(self, other: Do) -> Do:
+        if len(self.do) != len(other.do):
+            raise Exception(f"deep_merge Do MUST be same lengths: {self} != {other}")
         return self.copy(
-            deep=True, update={"steps": [step.rewrite(rewrites) for step in self.steps]}
+            deep=True,
+            update={
+                "do": [
+                    self_do.deep_merge(other_do)
+                    for self_do, other_do in zip(self.do, other.do)
+                ]
+            },
         )
 
-    def deep_merge(self, other: In_parallel):
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Do:
+        return self.copy(
+            deep=True,
+            update={"do": [step.handle_rewrite(handle_rewrites) for step in self.do]},
+        )
+
+    def handles(self) -> List[Tuple[str, str]]:
+
+        return [handle for step in self.do for handle in step.handles()]
+
+
+class In_parallel(YamlModel, StepABC, RewritesABC):
+    class Config(YamlModel):
+        steps: List[Step] = Field(default_factory=list)
+        limit: Optional[int] = None
+        fail_fast: bool = False
+
+    # in_parallel: Union[List[Step], In_parallel.Config]
+    # Above Union should work but there seems to be a bug in Pydantic where it cannot
+    # recognise/check all lists. Maybe need to consider to use pre rather than post
+    # substitution
+    in_parallel: In_parallel.Config
+
+    def sort_key(self) -> str:
+
+        return f'{type(self)}:{"".join(sorted(self.in_parallel.steps, key=In_parallel.step_sortkey))}' # noqa
+
+    @classmethod
+    def step_sortkey(cls, item: Step) -> str:
+
+        return item.sort_key()
+
+    def __eq__(self, other: In_parallel) -> bool:
+        return (
+            self.in_parallel.limit == other.in_parallel.limit
+            and self.in_parallel.fail_fast == other.in_parallel.fail_fast
+            and sorted(self.in_parallel.steps, key=In_parallel.step_sortkey)
+            == sorted(other.in_parallel.steps, key=In_parallel.step_sortkey)
+        )
+        return self.name < other.name
+
+    @root_validator(skip_on_failure=True)
+    def cooerce_in_parallel_to_verbose(cls, values):
+
+        if not isinstance(values.get("in_parallel"), In_parallel.Config):
+            print(f"DOING COOERCION {values}")
+            values["in_parallel"] = In_parallel.Config(steps=values.get("in_parallel"))
+            raise Exception("COOERCION of type is not working")
+
+        return values
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> In_parallel:
+        return self.copy(
+            deep=True,
+            update={
+                "in_parallel": self.in_parallel.copy(
+                    deep=True,
+                    update={
+                        "steps": [
+                            step.resource_rewrite(resource_rewrites)
+                            for step in self.in_parallel.steps
+                        ]
+                    },
+                ),
+            },
+        )
+
+    def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> In_parallel:
+        return self.copy(
+            deep=True,
+            update={
+                "in_parallel": self.in_parallel.copy(
+                    deep=True,
+                    update={
+                        "steps": [
+                            step.handle_rewrite(handle_rewrites)
+                            for step in self.in_parallel.steps
+                        ]
+                    },
+                ),
+            },
+        )
+
+    def handles(self) -> List[Tuple[str, str]]:
+        return [handle for step in self.in_parallel.steps for handle in step.handles()]
+
+    def deep_merge(self, other: In_parallel) -> In_parallel:
         # For every item in the add it if it does not already exist
-        for newitem in other.steps:
-            if newitem not in self.steps:
-                self.steps.append(newitem)
+        new_parallel = self.copy(deep=True)
+
+        for step in other.in_parallel.steps:
+            if step in new_parallel.in_parallel.steps:
+                print(f"Already have {step}")
+            else:
+                new_parallel.in_parallel.steps.append(step.copy(deep=True))
+
+        return new_parallel
 
 
 Step = Union[Get, Put, Task, In_parallel, Do]
 
 Do.update_forward_refs()
 In_parallel.update_forward_refs()
+In_parallel.Config.update_forward_refs()
 
 
 class LogRetentionPolicy(YamlModel):
@@ -346,7 +671,7 @@ class LogRetentionPolicy(YamlModel):
     minimum_succeeded_builds: int
 
 
-class Job(YamlModel, Rewrites):
+class Job(YamlModel, RewritesABC):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
@@ -376,24 +701,65 @@ class Job(YamlModel, Rewrites):
             and self.interruptible == other.interruptible
         )
 
-    def rewrite(self, rewrites: Dict[str, str]) -> Job:
+    def __lt__(self, other):
+        return self.name < other.name
+
+    def resource_rewrite(
+        self,
+        resource_rewrites: Dict[str, str],
+    ) -> Job:
         return self.copy(
             deep=True,
             update={
-                "plan": [step.rewrite(rewrites) for step in self.plan],
-                "on_success": self.on_success.rewrite(rewrites)
+                "plan": [
+                    step.resource_rewrite(resource_rewrites) for step in self.plan
+                ],
+                "on_success": self.on_success.resource_rewrite(resource_rewrites)
                 if self.on_success
                 else None,
-                "on_failure": self.on_failure.rewrite(rewrites)
+                "on_failure": self.on_failure.resource_rewrite(resource_rewrites)
                 if self.on_failure
                 else None,
-                "on_error": self.on_error.rewrite(rewrites) if self.on_error else None,
-                "on_abort": self.on_abort.rewrite(rewrites) if self.on_abort else None,
-                "ensure": self.ensure.rewrite(rewrites) if self.ensure else None,
+                "on_error": self.on_error.resource_rewrite(resource_rewrites)
+                if self.on_error
+                else None,
+                "on_abort": self.on_abort.resource_rewrite(resource_rewrites)
+                if self.on_abort
+                else None,
+                "ensure": self.ensure.resource_rewrite(resource_rewrites)
+                if self.ensure
+                else None,
             },
         )
 
-    def deep_merge(self, other: Job):
+    def handle_rewrite(
+        self,
+        handle_rewrites: Dict[str, str],
+    ) -> Job:
+
+        return self.copy(
+            deep=True,
+            update={
+                "plan": [step.handle_rewrite(handle_rewrites) for step in self.plan],
+                "on_success": self.on_success.handle_rewrite(handle_rewrites)
+                if self.on_success
+                else None,
+                "on_failure": self.on_failure.handle_rewrite(handle_rewrites)
+                if self.on_failure
+                else None,
+                "on_error": self.on_error.handle_rewrite(handle_rewrites)
+                if self.on_error
+                else None,
+                "on_abort": self.on_abort.handle_rewrite(handle_rewrites)
+                if self.on_abort
+                else None,
+                "ensure": self.ensure.handle_rewrite(handle_rewrites)
+                if self.ensure
+                else None,
+            },
+        )
+
+    def deep_merge(self, other: Job) -> Job:
 
         # Check rules before we attempt the deep_merge
         if (
@@ -408,11 +774,51 @@ class Job(YamlModel, Rewrites):
         if len(self.plan) != len(other.plan):
             raise Exception("deep_merge only when plans are same length")
 
-        for selfPlan, otherPlan in zip(self.plan, other.plan):
-            print(f"DEEP_MERGING: {selfPlan} {otherPlan}")
-            selfPlan.deep_merge(otherPlan)
+        return self.copy(
+            deep=True,
+            update={
+                "plan": [
+                    self_plan.deep_merge(other_plan)
+                    for self_plan, other_plan in zip(self.plan, other.plan)
+                ]
+            },
+        )
 
-        # iamhere
+    def handles(self) -> List[Tuple[str, str]]:
+        # list_list = [step.handles() for step in self.plan]
+        return [handle for step in self.plan for handle in step.handles()]
+
+    @classmethod
+    def resource_rewrites(
+        cls,
+        in_list: List[RewritesABC],
+        resource_rewrites: Dict[str, str],
+    ) -> List[RewritesABC]:
+        """Apply resource_rewrite pattern to objects"""
+        return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
+
+    @classmethod
+    def handle_rewrites(
+        cls,
+        in_list: List[Job],
+        handle_rewrites: Dict[str, Dict[str, str]],
+    ) -> List[Job]:
+        """Apply handle_rewrite pattern to objects"""
+        return [job.handle_rewrite(handle_rewrites[job.name]) for job in in_list]
+
+    @classmethod
+    def handle_uniques_and_rewrites(
+        cls, jobs_left: List[Job], jobs_right: List[Job]
+    ) -> Dict[str, Dict[str, str]]:
+        """
+        Returns the name of the job and the rewrites for then handles in that job
+        rewrites are direct copies if no collisions else collision rules apply
+        (re-use or copy)
+        """
+        print(f"handle_rewrites for {jobs_left} and {jobs_right}")
+        if jobs_right:
+            print("TODO STOP HERE")
+        return {}
 
 
 class Pipeline(YamlModel):
@@ -450,11 +856,6 @@ class Pipeline(YamlModel):
             )
         )
 
-    def __post_init__(self):
-        self.resource_types.sort()
-        self.resources.sort()
-        self.jobs.sort()
-
     def validate(self) -> bool:
         """Check if the Pipeline is valid
 
@@ -481,7 +882,7 @@ class Pipeline(YamlModel):
         It will resolve shared resources and map into a single name.
         It will resolve different resources with same name into discrete resourcess.
         The secondary plan be modified in naming, but not in function during the merge
-        to achinve minimal :class:`Resource` s and :class:`ResourceType` s.
+        to achieve minimal :class:`Resource` s and :class:`ResourceType` s.
 
         :param aThing: Base concourse plan to add second plan to.
         This will be unchanged through merge process
@@ -500,22 +901,54 @@ class Pipeline(YamlModel):
         if not pipeline_right.validate():
             raise Exception(f"pipeline_right is not valid: {pipeline_right}")
 
-        resource_types, resource_types_rewrites = ResourceType.uniques_and_rewrites(
+        # set of resource_types from merge and rewrites of resources to achieve this
+        (
+            resource_types,
+            resource_types_right_rewrites,
+        ) = ResourceType.uniques_and_rewrites(
             pipeline_left.resource_types, pipeline_right.resource_types
         )
 
-        bThing_resource_renames = Resource.rewrites(
-            pipeline_right.resources, resource_types_rewrites
+        # resource_types updated for resources from RHS
+        resources_right_rewritten = Resource.rewrites(
+            pipeline_right.resources, resource_types_right_rewrites
         )
 
-        resources, resource_rewrites = Resource.uniques_and_rewrites(
-            pipeline_left.resources, bThing_resource_renames
+        # Unique resources and rewrites to achieve this
+        resources, resources_right_rewrites = Resource.uniques_and_rewrites(
+            pipeline_left.resources, resources_right_rewritten
         )
 
-        bThing_jobs = Job.rewrites(pipeline_right.jobs, resource_rewrites)
+        # NOT WHAT NEXT
+        # 1. Update RHS with all resource rewrites ????
+        #      if RHS is get/put then can keep handle as is and modify the resource it
+        #      points to SO all handles stay same.
+        #      No need to modify ANY handles (ie gets/puts are only interfaces to
+        #      resources so these solve all updates of resources)
+        # 2. If we also do deep merge then we can (inside parallel steps) add more
+        #      handles and result in handle collision.
+        #      To solve this we identify the uniques and renames of handles through
+        #      merges (ONLY when job names match) and then we generate
+        #      the set of handle uniques and renames needed for RHS.
 
-        jobs, job_rewrites = Job.uniques_and_rewrites(
-            pipeline_left.jobs, bThing_jobs, deep
+        jobs_right_rewritten = Job.resource_rewrites(
+            pipeline_right.jobs, resources_right_rewrites
+        )
+
+        # # Evaluate the rewrites necessary for clashes if we run a deep merge
+        # jobs_right_handles_rewrites  = Job.handle_uniques_and_rewrites(
+        #     pipeline_left.jobs, jobs_right_rewritten
+        # )
+
+        # jobs_right_handles_rewritten = Job.handle_rewrites(
+        #     jobs_right_rewritten, jobs_right_handles_rewrites
+        # )
+
+        # for each job in rhs consider to add it based on being net new OR with handle
+        # rewrites internal to it (handle rewrites are only scoped to the job at hand)
+
+        jobs, jobs_right_rewrites = Job.uniques_and_rewrites(
+            pipeline_left.jobs, jobs_right_rewritten, deep
         )
 
         return Pipeline(resource_types=resource_types, resources=resources, jobs=jobs)

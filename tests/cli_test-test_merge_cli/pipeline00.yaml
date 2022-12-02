@@ -19,6 +19,7 @@ jobs:
         - name: concourse-docs-git
       platform: linux
       image_resource:
+        name: busybox
         type: registry-image
         source: { repository: busybox }
       run:
@@ -30,6 +31,7 @@ jobs:
         - name: concourse-docs-gitpy
       platform: linux
       image_resource:
+        name: busybox
         type: registry-image
         source: { repository: busybox }
       run:
