@@ -56,3 +56,6 @@ pre-commit:
 
 secrets-baseline:
 	$(DETECT_SECRETS) scan > .secrets.baseline
+
+cleanbranches:
+	git branch --merged| egrep -v "(^\*|master|main|dev)" | xargs git branch -d
