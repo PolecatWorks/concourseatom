@@ -10,6 +10,19 @@ from pydantic import Field, validator
 from pydantic_yaml import YamlModel
 
 
+def get_uniquename(name: str, namelist: List[str]) -> str:
+    """get a unique name to add to the list based on its original name and
+    incrementing the counter until we hit a unique entry"""
+
+    index_num = 0
+    b_alt_name = f"{name}-{index_num:0>3}"
+    while b_alt_name in namelist:
+        index_num += 1
+        b_alt_name = f"{name}-{index_num:0>3}"
+
+    return b_alt_name
+
+
 def get_random_ingredients(kind=None):
     """
     >>> 1+1
@@ -23,17 +36,32 @@ def get_random_ingredients(kind=None):
 
 
 class StepABC(ABC):
+    """ABC for Step class
+    Step class represents objects of type step used by concourse plans
+    """
+
+    def deep_merge(self, other: StepABC):
+        if self != other:
+            raise Exception(f"deep_merge items MUST be identical: {self} != {other}")
+
+    @abstractmethod
+    def handles(self) -> List[Tuple[str, str]]:
+        """
+        Recursively get the handles used by the job AND their resource if there
+        is one.
+
+        Returns:
+            List[Tuple[str, str]]: List of handle, resource
+        """
+        pass
+
+
+class RewritesABC(ABC):
     @abstractmethod
     def resource_rewrite(self, rewrites: Dict[str, str]) -> StepABC:
         pass
 
-    def deep_merge(self, other: Rewrites):
-        if self != other:
-            raise Exception(f"deep_merge items MUST be identical: {self} != {other}")
-
-
-class Rewrites(StepABC):
-    def exactEq(self, other: Rewrites) -> bool:
+    def exactEq(self, other: RewritesABC) -> bool:
         return self.name == other.name and self == other
 
     def __lt__(self, other):
@@ -41,8 +69,8 @@ class Rewrites(StepABC):
 
     @classmethod
     def uniques_and_rewrites(
-        cls, aList: List[Rewrites], bList: List[Rewrites], deep: bool = False
-    ) -> Tuple[List[Rewrites], Dict[str, str]]:
+        cls, aList: List[RewritesABC], bList: List[RewritesABC], deep: bool = False
+    ) -> Tuple[List[RewritesABC], Dict[str, str]]:
         """
         aList gets priority and copied verbatim
         If item already exists in aList then create rewrite from its name in bList
@@ -53,7 +81,7 @@ class Rewrites(StepABC):
         return the final list AND a dict of resource_rewrites and handle_rewrites
         """
 
-        ret_list: List[Rewrites] = aList.copy()
+        ret_list: List[RewritesABC] = aList.copy()
         resource_rewrite_map: Dict[str, str] = {}
 
         for item in bList:
@@ -69,12 +97,48 @@ class Rewrites(StepABC):
                 if deep:
                     # Note deep is only valid for Job (not Resource or Resource_type)
                     print(f"Doing a deep merge and working on item called: {item.name}")
+
+                    # get the item we plan to deep merge in
                     target_item = next(
                         resource for resource in ret_list if resource.name == item.name
                     )
                     print(f"Doing deep update to: {type(target_item)} {target_item}")
 
-                    target_item.deep_merge(item)
+                    target_handles = target_item.handles()
+                    handles = item.handles()
+
+                    # ToDo: dedup here
+
+                    handle_rewrites: Dict[str, str] = {}
+                    handle_list = target_handles.copy()
+
+                    for handle in handles:
+                        if handle in handle_list:
+                            # if handle in target and same resource then rewrite to same
+                            # name NOT add to list
+                            handle_rewrites[handle[0]] = handle[0]
+                        elif handle[0] in (
+                            target_handle
+                            for target_handle, target_resource in handle_list
+                        ):
+                            # if handle in target BUT different resource the create
+                            # rewrite of handle
+                            alt_name = get_uniquename(
+                                handle[0],
+                                (
+                                    target_handle
+                                    for target_handle, target_resource in handle_list
+                                ),
+                            )
+                            handle_rewrites[handle[0]] = alt_name
+                            handle_list.append((alt_name, handle[1]))
+                        else:
+                            # else add entry and rewrite to itself
+                            handle_rewrites[handle[0]] = handle[0]
+                            handle_list.append(handle)
+
+                    new_target = target_item.deep_merge(item)
+                    print(new_target)
                     # Do not update ret_list via append as items are deep_merged in
                 else:
 
@@ -82,18 +146,12 @@ class Rewrites(StepABC):
                     # Get the list of all names in output objects
                     namelist = [resource.name for resource in ret_list]
 
-                    # Run through a sequence of numbers to find a number that makes a
-                    # unique entry on the output names
-                    index_num = 0
-                    b_alt_name = f"{item.name}-{index_num:0>3}"
-                    while b_alt_name in namelist:
-                        index_num += 1
-                        b_alt_name = f"{item.name}-{index_num:0>3}"
+                    alt_name = get_uniquename(item.name, namelist)
 
                     # Update the new name with the proposed rewrite name
-                    resource_rewrite_map[item.name] = b_alt_name
+                    resource_rewrite_map[item.name] = alt_name
 
-                    ret_list.append(item.copy(deep=True, update={"name": b_alt_name}))
+                    ret_list.append(item.copy(deep=True, update={"name": alt_name}))
             else:  # Item is unique so add it
                 resource_rewrite_map[item.name] = item.name
                 ret_list.append(item.copy(deep=True))
@@ -103,14 +161,14 @@ class Rewrites(StepABC):
     @classmethod
     def rewrites(
         cls,
-        in_list: List[Rewrites],
+        in_list: List[RewritesABC],
         resource_rewrites: Dict[str, str],
-    ) -> List[Rewrites]:
+    ) -> List[RewritesABC]:
         """Apply rewrite pattern to type parameter"""
         return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
 
 
-class ResourceType(YamlModel, Rewrites):
+class ResourceType(YamlModel, RewritesABC):
     name: str
     type: str
     source: Dict[str, Any] = Field(default_factory=dict)
@@ -141,7 +199,7 @@ class ResourceType(YamlModel, Rewrites):
         return self.type < other.type
 
 
-class ResourceUnnamed(YamlModel, Rewrites):
+class ResourceUnnamed(YamlModel, RewritesABC):
     type: str
     source: Dict[str, Any]
     old_name: Optional[str] = None
@@ -181,6 +239,8 @@ class ResourceUnnamed(YamlModel, Rewrites):
 
 class Resource(ResourceUnnamed):
     name: str
+    # ToDo: is this valid or should this be dropped and jsut use ResourceUnnamed
+    # directly
 
 
 class Command(YamlModel):
@@ -238,7 +298,7 @@ class TaskConfig(YamlModel):
     container_limits: Optional[Container_limits] = None
 
 
-class Task(YamlModel, StepABC):
+class Task(YamlModel, StepABC, RewritesABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -282,8 +342,20 @@ class Task(YamlModel, StepABC):
         #     },
         # )
 
+    def handles(self) -> List[Tuple[str, str]]:
+        retval: List[Tuple[str, str]] = []
 
-class Get(YamlModel, StepABC):
+        for handle in self.config.inputs:
+            retval.append((handle.name, None))
+        for handle in self.config.outputs:
+            retval.append((handle.name, None))
+
+        # ToDo: Consider input_mapping and output_mapping also
+
+        return retval
+
+
+class Get(YamlModel, StepABC, RewritesABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = Field(default_factory=list)
@@ -306,12 +378,15 @@ class Get(YamlModel, StepABC):
             deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
         )
 
-    def deep_merge(self, other: Rewrites):
+    def deep_merge(self, other: RewritesABC):
         if self != other:
             raise Exception("Default deep_merge process just checks identicial")
 
+    def handles(self) -> List[Tuple[str, str]]:
+        return [(self.get, self.resource if self.resource else self.get)]
 
-class Put(YamlModel, StepABC):
+
+class Put(YamlModel, StepABC, RewritesABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -333,8 +408,11 @@ class Put(YamlModel, StepABC):
             deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
         )
 
+    def handles(self) -> List[Tuple[str, str]]:
+        return [(self.put, self.resource if self.resource else self.put)]
 
-class Do(YamlModel, StepABC):
+
+class Do(YamlModel, StepABC, RewritesABC):
     do: List[Step]
 
     def resource_rewrite(
@@ -348,8 +426,12 @@ class Do(YamlModel, StepABC):
             },
         )
 
+    def handles(self) -> List[Tuple[str, str]]:
 
-class In_parallel(YamlModel, StepABC):
+        return [handle for step in self.do for handle in step.handles()]
+
+
+class In_parallel(YamlModel, StepABC, RewritesABC):
     class Config(YamlModel):
         steps: List[Step] = Field(default_factory=list)
         limit: Optional[int] = None
@@ -389,6 +471,9 @@ class In_parallel(YamlModel, StepABC):
             },
         )
 
+    def handles(self) -> List[Tuple[str, str]]:
+        return [handle for step in self.in_parallel.steps for handle in step.handles()]
+
     def deep_merge(self, other: In_parallel):
         # For every item in the add it if it does not already exist
         for newitem in other.in_parallel.steps:
@@ -419,7 +504,7 @@ class LogRetentionPolicy(YamlModel):
     minimum_succeeded_builds: int
 
 
-class Job(YamlModel, Rewrites):
+class Job(YamlModel, RewritesABC):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
@@ -477,6 +562,15 @@ class Job(YamlModel, Rewrites):
             },
         )
 
+    def handle_rewrite(
+        self,
+        handle_rewrites: Dict[str, str],
+    ) -> Job:
+        print("WORK TO DO HERE")
+        return self.copy(
+            deep=True,
+        )
+
     def deep_merge(self, other: Job):
 
         # Check rules before we attempt the deep_merge
@@ -496,20 +590,40 @@ class Job(YamlModel, Rewrites):
             print(f"DEEP_MERGING: {selfPlan} {otherPlan}")
             selfPlan.deep_merge(otherPlan)
 
+    def handles(self) -> List[Tuple[str, str]]:
+        # list_list = [step.handles() for step in self.plan]
+        return [handle for step in self.plan for handle in step.handles()]
+
     @classmethod
-    def rewrites(
+    def resource_rewrites(
         cls,
-        in_list: List[Rewrites],
+        in_list: List[RewritesABC],
         resource_rewrites: Dict[str, str],
-    ) -> List[Rewrites]:
-        """Apply rewrite pattern to type parameter"""
+    ) -> List[RewritesABC]:
+        """Apply resource_rewrite pattern to objects"""
         return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
 
     @classmethod
     def handle_rewrites(
+        cls,
+        in_list: List[Job],
+        handle_rewrites: Dict[str, Dict[str, str]],
+    ) -> List[Job]:
+        """Apply handle_rewrite pattern to objects"""
+        return [job.handle_rewrite(handle_rewrites[job.name]) for job in in_list]
+
+    @classmethod
+    def handle_uniques_and_rewrites(
         cls, jobs_left: List[Job], jobs_right: List[Job]
-    ) -> Dict[str, str]:
-        print("NEED TO DO THIS")
+    ) -> Dict[str, Dict[str, str]]:
+        """
+        Returns the name of the job and the rewrites for then handles in that job
+        rewrites are direct copies if no collisions else collision rules apply
+        (re-use or copy)
+        """
+        print(f"handle_rewrites for {jobs_left} and {jobs_right}")
+        if jobs_right:
+            print("TODO STOP HERE")
         return {}
 
 
@@ -628,9 +742,18 @@ class Pipeline(YamlModel):
         #      merges (ONLY when job names match) and then we generate
         #      the set of handle uniques and renames needed for RHS.
 
-        jobs_right_rewritten = Job.rewrites(
+        jobs_right_rewritten = Job.resource_rewrites(
             pipeline_right.jobs, resources_right_rewrites
         )
+
+        # # Evaluate the rewrites necessary for clashes if we run a deep merge
+        # jobs_right_handles_rewrites  = Job.handle_uniques_and_rewrites(
+        #     pipeline_left.jobs, jobs_right_rewritten
+        # )
+
+        # jobs_right_handles_rewritten = Job.handle_rewrites(
+        #     jobs_right_rewritten, jobs_right_handles_rewrites
+        # )
 
         # for each job in rhs consider to add it based on being net new OR with handle
         # rewrites internal to it (handle rewrites are only scoped to the job at hand)

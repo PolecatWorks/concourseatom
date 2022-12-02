@@ -1134,6 +1134,126 @@ def test_merge_pipelines(yaml_l, yaml_r, yaml_merged):
                   resource: b
           """,
         ),
+        (  # Test in_parallel merge with pull task and push comparing docker and helm
+            """
+          resource_types:
+          - name: github
+            type: e
+            source:
+              image: gh
+          - name: artifactory
+            type: e
+            source:
+              image: artidocker
+          resources:
+          - name: src
+            type: github
+            source:
+              a: github
+          - name: docker
+            type: artifactory
+            source:
+              a: docker
+          jobs:
+          - name: pr-build
+            plan:
+            - get: src
+            - in_parallel:
+              - task: buildmydocker
+                config:
+                  inputs:
+                  - name: src
+                  outputs:
+                  - name: src
+                  - name: docker
+            - in_parallel:
+              - put: docker
+          """,
+            """
+          resource_types:
+          - name: github
+            type: e
+            source:
+              image: gh
+          - name: artifactory
+            type: e
+            source:
+              image: artihelm
+          resources:
+          - name: src
+            type: github
+            source:
+              a: github
+          - name: helm
+            type: artifactory
+            source:
+              a: docker
+          jobs:
+          - name: pr-build
+            plan:
+            - get: src
+            - in_parallel:
+              - task: buildmyhelm
+                config:
+                  inputs:
+                  - name: src
+                  outputs:
+                  - name: src
+                  - name: helm
+            - in_parallel:
+              - put: helm
+            """,
+            """
+          resource_types:
+          - name: github
+            type: e
+            source:
+              image: gh
+          - name: artifactory
+            type: e
+            source:
+              image: artihelm
+          - name: artifactory-000
+            type: e
+            source:
+              image: artidocker
+          resources:
+          - name: src
+            type: github
+            source:
+              a: github
+          - name: helm
+            type: artifactory
+            source:
+              a: docker
+          - name: docker
+            type: artifactory-000
+            source:
+              a: docker
+          jobs:
+          - name: pr-build
+            plan:
+            - get: src
+            - in_parallel:
+              - task: buildmydocker
+                config:
+                  inputs:
+                  - name: src
+                  outputs:
+                  - name: src
+                  - name: docker
+              - task: buildmyhelm
+                config:
+                  inputs:
+                  - name: src
+                  outputs:
+                  - name: src
+                  - name: helm
+            - in_parallel:
+              - put: helm
+              - put: docker
+          """,
+        ),
     ],
 )
 def test_merge_pipelines_deep(yaml_l, yaml_r, yaml_merged):
