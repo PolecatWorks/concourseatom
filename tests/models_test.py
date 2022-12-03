@@ -292,23 +292,23 @@ def test_in_parallel():
     assert len(test1.in_parallel.steps) == 1
     assert isinstance(test1.in_parallel.steps[0], Task)
 
-    # task_short_example = """
-    #   in_parallel:
-    #   - task: buildmydocker
-    #     config:
-    #       platform: linux
-    #       command:
-    #         path: run
-    #       inputs:
-    #       - name: src
-    #       outputs:
-    #       - name: src
-    #       - name: docker
-    # """
-    # test2 = In_parallel.parse_raw(task_short_example)
-    # assert isinstance(test2.in_parallel, In_parallel.Config)
-    # assert len(test2.in_parallel.steps) == 2
-    # assert isinstance(test2.in_parallel.steps[0], Task)
+    task_short_example = """
+      in_parallel:
+      - task: buildmydocker
+        config:
+          platform: linux
+          run:
+            path: run
+          inputs:
+          - name: src
+          outputs:
+          - name: src
+          - name: docker
+    """
+    test2 = In_parallel.parse_raw(task_short_example)
+    assert isinstance(test2.in_parallel, In_parallel.Config)
+    assert len(test2.in_parallel.steps) == 1
+    assert isinstance(test2.in_parallel.steps[0], Task)
 
 
 @pytest.mark.parametrize(
@@ -584,27 +584,29 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
                   fail_fast: True
             """,
         ),
-        # Disabled shortened form since it seems to not work correctly.
-        # (  # Shortended form
-        #     In_parallel,
-        #     """
-        #         in_parallel:
-        #         - get: a
-        #     """,
-        # ),
-        # ( # Shortened form with task
-        #   In_parallel,
-        #   """
-        #     in_parallel:
-        #       - task: buildmydocker
-        #         config:
-        #           inputs:
-        #           - name: src
-        #           outputs:
-        #           - name: src
-        #           - name: docker
-        #   """
-        # ),
+        (  # Shortended form
+            In_parallel,
+            """
+                in_parallel:
+                - get: a
+            """,
+        ),
+        (  # Shortened form with task
+            In_parallel,
+            """
+            in_parallel:
+              - task: buildmydocker
+                config:
+                  platform: linux
+                  run:
+                    path: ls
+                  inputs:
+                  - name: src
+                  outputs:
+                  - name: src
+                  - name: docker
+          """,
+        ),
         (
             LogRetentionPolicy,
             """
