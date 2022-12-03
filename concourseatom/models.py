@@ -559,7 +559,7 @@ class Do(YamlModel, StepABC, RewritesABC):
 
 class In_parallel(YamlModel, StepABC, RewritesABC):
     class Config(YamlModel):
-        steps: List[Step] = Field(default_factory=list)
+        steps: List[Step]
         limit: Optional[int] = None
         fail_fast: bool = False
 
@@ -587,14 +587,11 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
         )
         return self.name < other.name
 
-    @root_validator(skip_on_failure=True)
-    def cooerce_in_parallel_to_verbose(cls, values):
+    @root_validator(pre=True)
+    def cooerce_compact_to_verbose_style(cls, values):
 
-        if not isinstance(values.get("in_parallel"), In_parallel.Config):
-            print(f"DOING COOERCION {values}")
-            values["in_parallel"] = In_parallel.Config(steps=values.get("in_parallel"))
-            raise Exception("COOERCION of type is not working")
-
+        if isinstance(values.get("in_parallel"), list):
+            values["in_parallel"] = {"steps": values.get("in_parallel")}
         return values
 
     def resource_rewrite(
