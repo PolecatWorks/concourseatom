@@ -384,13 +384,31 @@ class Task(YamlModel, StepABC, RewritesABC):
             and self.vars == other.vars
             and self.container_limits == other.container_limits
             and self.params == other.params
-            and set(self._effective_input(input.name) for input in self.config.inputs)
-            == set(other._effective_input(input.name) for input in other.config.inputs)
-            and set(
-                self._effective_output(output.name) for output in self.config.outputs
+            and (
+                self.config is None
+                or (
+                    set(
+                        self._effective_input(input.name)
+                        for input in self.config.inputs
+                    )
+                    == set(
+                        other._effective_input(input.name)
+                        for input in other.config.inputs
+                    )
+                )
             )
-            == set(
-                other._effective_output(output.name) for output in other.config.outputs
+            and (
+                self.config is None
+                or (
+                    set(
+                        self._effective_output(output.name)
+                        for output in self.config.outputs
+                    )
+                    == set(
+                        other._effective_output(output.name)
+                        for output in other.config.outputs
+                    )
+                )
             )
         )
 
