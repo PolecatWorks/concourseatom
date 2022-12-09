@@ -62,3 +62,7 @@ cleanbranches:
 
 create-patch:
 	git diff > concourseatom-$(shell date +"%Y%m%d").patch
+
+publish:
+	poetry build
+	poetry publish
