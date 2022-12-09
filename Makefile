@@ -59,3 +59,6 @@ secrets-baseline:
 
 cleanbranches:
 	git branch --merged| egrep -v "(^\*|master|main|dev)" | xargs git branch -d
+
+create-patch:
+	git diff > concourseatom-$(shell date +"%Y%m%d").patch

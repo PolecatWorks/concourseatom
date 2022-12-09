@@ -109,13 +109,11 @@ class RewritesABC(ABC):
 
                 if deep:
                     # Note deep is only valid for Job (not Resource or Resource_type)
-                    print(f"Doing a deep merge and working on item called: {item.name}")
 
                     # get the item we plan to deep merge in
                     target_item = next(
                         resource for resource in ret_list if resource.name == item.name
                     )
-                    print(f"Doing deep update to: {type(target_item)} {target_item}")
 
                     target_handles = target_item.handles()
                     all_handles = item.handles()
@@ -169,7 +167,6 @@ class RewritesABC(ABC):
                             handle_rewrites[handle[0]] = handle[0]
                             handle_list.append(handle)
 
-                    print(f"Deep job: rewrites={handle_rewrites}")
                     new_item = item.handle_rewrite(handle_rewrites)
                     new_target = target_item.deep_merge(new_item)
 
@@ -182,7 +179,6 @@ class RewritesABC(ABC):
                     # Do not update ret_list via append as items are deep_merged in
                 else:
 
-                    print("Doing shallow copy")
                     # Get the list of all names in output objects
                     namelist = [resource.name for resource in ret_list]
 
@@ -350,6 +346,12 @@ class TaskConfig(YamlModel):
     rootfs_uri: Optional[str] = None
     container_limits: Optional[Container_limits] = None
 
+    def input_by_name(self, name: str) -> Input:
+        return next(input for input in self.inputs if input.name == name)
+
+    def output_by_name(self, name: str) -> Output:
+        return next(output for output in self.outputs if output.name == name)
+
 
 class Task(YamlModel, StepABC, RewritesABC):
     """Concourse Task class
@@ -361,15 +363,57 @@ class Task(YamlModel, StepABC, RewritesABC):
     config: Optional[TaskConfig] = None
     file: Optional[str] = None
     image: Optional[str] = None
-    priviledged: bool = False
+    privileged: bool = False
     vars: Dict[str, str] = Field(default_factory=dict)
     container_limits: Optional[Container_limits] = None
     params: Dict[str, str] = Field(default_factory=dict)
     input_mapping: Dict[str, str] = Field(default_factory=dict)
     output_mapping: Dict[str, str] = Field(default_factory=dict)
 
+    def _effective_input(self, name: str) -> str:
+        return self.input_mapping[name] if name in self.input_mapping else name
+
+    def _effective_output(self, name: str) -> str:
+        return self.output_mapping[name] if name in self.output_mapping else name
+
+    def __eq__(self, other: Task) -> bool:
+        return (
+            self.task == other.task
+            and self.config == other.config
+            and self.image == other.image
+            and self.vars == other.vars
+            and self.container_limits == other.container_limits
+            and self.params == other.params
+            and (
+                self.config is None
+                or (
+                    set(
+                        self._effective_input(input.name)
+                        for input in self.config.inputs
+                    )
+                    == set(
+                        other._effective_input(input.name)
+                        for input in other.config.inputs
+                    )
+                )
+            )
+            and (
+                self.config is None
+                or (
+                    set(
+                        self._effective_output(output.name)
+                        for output in self.config.outputs
+                    )
+                    == set(
+                        other._effective_output(output.name)
+                        for output in other.config.outputs
+                    )
+                )
+            )
+        )
+
     def sort_key(self) -> str:
-        return f"{type(self)}:{self.task}"
+        return f"Task:{self.task}"
 
     def resource_rewrite(
         self,
@@ -441,7 +485,7 @@ class Get(YamlModel, StepABC, RewritesABC):
         )
 
     def sort_key(self) -> str:
-        return f"{type(self)}:{self.get}"
+        return f"Get:{self.get}"
 
     def effective_resource(self):
         return self.resource if self.resource else self.get
@@ -487,7 +531,7 @@ class Put(YamlModel, StepABC, RewritesABC):
         )
 
     def sort_key(self) -> str:
-        return f"{type(self)}:{self.put}"
+        return f"Put:{self.put}"
 
     def __post_init__(self):
         if not self.resource:
@@ -520,7 +564,7 @@ class Do(YamlModel, StepABC, RewritesABC):
     do: List[Step]
 
     def sort_key(self) -> str:
-        return f'{type(self)}:{"".join(self.do.sort_key())}'
+        return f"Do:{self.do}"
 
     def resource_rewrite(
         self,
@@ -570,8 +614,8 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
     in_parallel: In_parallel.Config
 
     def sort_key(self) -> str:
-
-        return f'{type(self)}:{"".join(sorted(self.in_parallel.steps, key=In_parallel.step_sortkey))}'  # noqa: E501
+        """Sort key for all Step objects"""
+        return f'In_parallel:{"".join(step.sort_key() for step in sorted(self.in_parallel.steps, key=StepABC.sort_key))}'  # noqa: E501
 
     @classmethod
     def step_sortkey(cls, item: Step) -> str:
@@ -585,7 +629,6 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
             and sorted(self.in_parallel.steps, key=In_parallel.step_sortkey)
             == sorted(other.in_parallel.steps, key=In_parallel.step_sortkey)
         )
-        return self.name < other.name
 
     @root_validator(pre=True)
     def cooerce_compact_to_verbose_style(cls, values):

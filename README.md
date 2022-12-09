@@ -11,3 +11,10 @@ This process is then similarily applied to resources.
 
 Finally the rewrites are then applied to the jobs recursively to modify the resource types of the get and put names to match the resources.
 It is also necessary to consider the name collisions of names of the handles of the resource not just there contents. These are identied as the objects that are the result of get and put and task mapped objects.
+
+
+# Issues
+
+Capture issues here to look at:
+
+* [ ] In_parallel objects inside In_parallel objects. Seems to be triggering issues with sort order (may not be consistent) so results in comparisons of types that are not same.
