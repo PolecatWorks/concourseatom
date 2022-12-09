@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "concourseatom"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read Concourse Pipelines and intelligently allowing pipelines to be built from snipits"
 authors = ["Ben Greene <BenJGreene@gmail.com>"]
 readme = "README.md"
