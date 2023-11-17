@@ -66,3 +66,6 @@ create-patch:
 publish:
 	poetry build
 	poetry publish
+
+clean-branches:
+	git branch --merged | egrep -v "(^\*|master|main|dev)" | xargs git branch -d

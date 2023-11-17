@@ -35,6 +35,11 @@ def get_random_ingredients(kind=None):
     return ["shells", "gorgonzola", "parsley"]
 
 
+# time resource_type is builtin. If a resource refers to type time then it is valid and
+# should be processed
+_internal_resource_types = ["time"]
+
+
 class StepABC(ABC):
     """ABC for Step class
     Step class represents objects of type step used by concourse plans
@@ -276,7 +281,7 @@ class ResourceUnnamed(YamlModel):
 
 class Resource(ResourceUnnamed, RewritesABC):
     name: str
-    # ToDo: is this valid or should this be dropped and jsut use ResourceUnnamed
+    # ToDo: is this valid or should this be dropped and just use ResourceUnnamed
     # directly
 
     def resource_rewrite(
@@ -907,6 +912,7 @@ class Pipeline(YamlModel):
         :return: all rules are passed
         """
         resource_type_names = [rt.name for rt in self.resource_types]
+        resource_type_names.extend(_internal_resource_types)
 
         return all(
             (resource.type in resource_type_names) for resource in self.resources
@@ -948,6 +954,10 @@ class Pipeline(YamlModel):
         ) = ResourceType.uniques_and_rewrites(
             pipeline_left.resource_types, pipeline_right.resource_types
         )
+        for type in _internal_resource_types:
+            # Internal rewrites are just pass-thru as there is no variance in them and
+            # they are always the same so need no name change during rewrite
+            resource_types_right_rewrites[type] = type
 
         # resource_types updated for resources from RHS
         resources_right_rewritten = Resource.rewrites(
