@@ -2,6 +2,12 @@
 
 This project provides a merge funtion to intelligently merge concourse jobs together.
 
+![PyPI - Format](https://img.shields.io/pypi/format/concourseatom)
+![PyPI - License](https://img.shields.io/pypi/l/concourseatom)
+![PyPI - Version](https://img.shields.io/pypi/v/concourseatom)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/concourseatom)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/concourseatom)
+
 
 # Rewrites in merge
 
@@ -18,3 +24,6 @@ It is also necessary to consider the name collisions of names of the handles of 
 Capture issues here to look at:
 
 * [ ] In_parallel objects inside In_parallel objects. Seems to be triggering issues with sort order (may not be consistent) so results in comparisons of types that are not same.
+
+
+https://pypi.org/project/concourseatom/
