@@ -6,7 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod  # This enables forward reference of types
 from typing import Any, Dict, Optional, List, Tuple, Union
 
-from pydantic import Field, root_validator, BaseModel
+from pydantic import Field, model_validator, BaseModel
 
 
 def get_uniquename(name: str, namelist: List[str]) -> str:
@@ -634,7 +634,7 @@ class In_parallel(BaseModel, StepABC, RewritesABC):
             == sorted(other.in_parallel.steps, key=In_parallel.step_sortkey)
         )
 
-    @root_validator(pre=True)
+    @model_validator(mode='before')
     def cooerce_compact_to_verbose_style(cls, values):
 
         if isinstance(values.get("in_parallel"), list):
@@ -694,9 +694,9 @@ class In_parallel(BaseModel, StepABC, RewritesABC):
 
 Step = Union[Get, Put, Task, In_parallel, Do]
 
-Do.update_forward_refs()
-In_parallel.update_forward_refs()
-In_parallel.Config.update_forward_refs()
+Do.model_rebuild()
+In_parallel.model_rebuild()
+In_parallel.Config.model_rebuild()
 
 
 class LogRetentionPolicy(BaseModel):
