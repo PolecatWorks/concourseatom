@@ -90,8 +90,8 @@ def merge(ctx, infile0, infile1, deep):
         click.echo(f"Starting to merge0 {infile0.name}", err=True)
         click.echo(f"Starting to merge1 {infile1.name}", err=True)
 
-    pipe0 = Pipeline.parse_raw(infile0)
-    pipe1 = Pipeline.parse_raw(infile1)
+    pipe0 = Pipeline.model_validate(infile0)
+    pipe1 = Pipeline.model_validate(infile1)
 
     merge = Pipeline.merge(pipe0, pipe1)
 

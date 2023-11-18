@@ -6,8 +6,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod  # This enables forward reference of types
 from typing import Any, Dict, Optional, List, Tuple, Union
 
-from pydantic import Field, root_validator
-from pydantic_yaml import YamlModel
+from pydantic import Field, root_validator, BaseModel
 
 
 def get_uniquename(name: str, namelist: List[str]) -> str:
@@ -209,7 +208,7 @@ class RewritesABC(ABC):
         return [resource.resource_rewrite(resource_rewrites) for resource in in_list]
 
 
-class ResourceType(YamlModel, RewritesABC):
+class ResourceType(BaseModel, RewritesABC):
     name: str
     type: str
     source: Dict[str, Any] = Field(default_factory=dict)
@@ -234,16 +233,16 @@ class ResourceType(YamlModel, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> ResourceType:
-        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
+        return self.model_copy(deep=True, update={"type": resource_rewrites[self.type]})
 
     def __lt__(self, other):
         return self.name < other.name
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> ResourceType:
-        return self.copy(deep=True, update={"name": handle_rewrites[self.name]})
+        return self.model_copy(deep=True, update={"name": handle_rewrites[self.name]})
 
 
-class ResourceUnnamed(YamlModel):
+class ResourceUnnamed(BaseModel):
     """
     Class used by Resource and Task
     """
@@ -288,16 +287,16 @@ class Resource(ResourceUnnamed, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> ResourceUnnamed:
-        return self.copy(deep=True, update={"type": resource_rewrites[self.type]})
+        return self.model_copy(deep=True, update={"type": resource_rewrites[self.type]})
 
     def __lt__(self, other):
         return self.name < other.name
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> ResourceUnnamed:
-        return self.copy(deep=True, update={"name": handle_rewrites[self.name]})
+        return self.model_copy(deep=True, update={"name": handle_rewrites[self.name]})
 
 
-class Command(YamlModel):
+class Command(BaseModel):
     """Command definition for task
 
     :param path: Path to executable
@@ -312,7 +311,7 @@ class Command(YamlModel):
     user: Optional[str] = None
 
 
-class Input(YamlModel):
+class Input(BaseModel):
     name: str
     path: Optional[str] = None
     optional: bool = False
@@ -322,7 +321,7 @@ class Input(YamlModel):
             self.path = self.name
 
 
-class Output(YamlModel):
+class Output(BaseModel):
     name: str
     path: Optional[str] = None
 
@@ -331,16 +330,16 @@ class Output(YamlModel):
             self.path = self.name
 
 
-class Cache(YamlModel):
+class Cache(BaseModel):
     path: str
 
 
-class Container_limits(YamlModel):
+class Container_limits(BaseModel):
     cpu: int
     memory: int
 
 
-class TaskConfig(YamlModel):
+class TaskConfig(BaseModel):
     platform: str
     run: Command
     image_resource: Optional[ResourceUnnamed] = None
@@ -358,7 +357,7 @@ class TaskConfig(YamlModel):
         return next(output for output in self.outputs if output.name == name)
 
 
-class Task(YamlModel, StepABC, RewritesABC):
+class Task(BaseModel, StepABC, RewritesABC):
     """Concourse Task class
 
     :param task: Name of the task
@@ -428,7 +427,7 @@ class Task(YamlModel, StepABC, RewritesABC):
         if self.file:
             raise Exception(f"No support for file in {self}")
 
-        return self.copy(
+        return self.model_copy(
             deep=True,
         )
 
@@ -439,7 +438,7 @@ class Task(YamlModel, StepABC, RewritesABC):
         if not self.config:
             raise Exception(f"Task needs config for {self}")
 
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "input_mapping": {
@@ -468,10 +467,10 @@ class Task(YamlModel, StepABC, RewritesABC):
     def deep_merge(self, other: Task) -> Task:
         if self != other:
             raise Exception(f"deep_merge Task MUST be identical: {self} != {other}")
-        return self.copy(deep=True)
+        return self.model_copy(deep=True)
 
 
-class Get(YamlModel, StepABC, RewritesABC):
+class Get(BaseModel, StepABC, RewritesABC):
     get: str
     resource: Optional[str] = None
     passed: List[str] = Field(default_factory=list)
@@ -503,23 +502,23 @@ class Get(YamlModel, StepABC, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> Get:
-        return self.copy(
+        return self.model_copy(
             deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
         )
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Get:
-        return self.copy(deep=True, update={"get": handle_rewrites[self.get]})
+        return self.model_copy(deep=True, update={"get": handle_rewrites[self.get]})
 
     def deep_merge(self, other: Get) -> Get:
         if self != other:
             raise Exception(f"deep_merge Get MUST be identical: {self} != {other}")
-        return self.copy(deep=True)
+        return self.model_copy(deep=True)
 
     def handles(self) -> List[Tuple[str, str]]:
         return [(self.get, self.resource if self.resource else self.get)]
 
 
-class Put(YamlModel, StepABC, RewritesABC):
+class Put(BaseModel, StepABC, RewritesABC):
     put: str
     resource: Optional[str] = None
     inputs: str = "all"
@@ -549,23 +548,23 @@ class Put(YamlModel, StepABC, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> Put:
-        return self.copy(
+        return self.model_copy(
             deep=True, update={"resource": resource_rewrites[self.effective_resource()]}
         )
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Put:
-        return self.copy(deep=True, update={"put": handle_rewrites[self.put]})
+        return self.model_copy(deep=True, update={"put": handle_rewrites[self.put]})
 
     def deep_merge(self, other: Put) -> Put:
         if self != other:
             raise Exception(f"deep_merge Put MUST be identical: {self} != {other}")
-        return self.copy(deep=True)
+        return self.model_copy(deep=True)
 
     def handles(self) -> List[Tuple[str, str]]:
         return [(self.put, self.resource if self.resource else self.put)]
 
 
-class Do(YamlModel, StepABC, RewritesABC):
+class Do(BaseModel, StepABC, RewritesABC):
     do: List[Step]
 
     def sort_key(self) -> str:
@@ -575,7 +574,7 @@ class Do(YamlModel, StepABC, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> Do:
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "do": [step.resource_rewrite(resource_rewrites) for step in self.do]
@@ -585,7 +584,7 @@ class Do(YamlModel, StepABC, RewritesABC):
     def deep_merge(self, other: Do) -> Do:
         if len(self.do) != len(other.do):
             raise Exception(f"deep_merge Do MUST be same lengths: {self} != {other}")
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "do": [
@@ -596,7 +595,7 @@ class Do(YamlModel, StepABC, RewritesABC):
         )
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> Do:
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={"do": [step.handle_rewrite(handle_rewrites) for step in self.do]},
         )
@@ -606,8 +605,8 @@ class Do(YamlModel, StepABC, RewritesABC):
         return [handle for step in self.do for handle in step.handles()]
 
 
-class In_parallel(YamlModel, StepABC, RewritesABC):
-    class Config(YamlModel):
+class In_parallel(BaseModel, StepABC, RewritesABC):
+    class Config(BaseModel):
         steps: List[Step]
         limit: Optional[int] = None
         fail_fast: bool = False
@@ -646,10 +645,10 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> In_parallel:
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
-                "in_parallel": self.in_parallel.copy(
+                "in_parallel": self.in_parallel.model_copy(
                     deep=True,
                     update={
                         "steps": [
@@ -662,10 +661,10 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
         )
 
     def handle_rewrite(self, handle_rewrites: Dict[str, str]) -> In_parallel:
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
-                "in_parallel": self.in_parallel.copy(
+                "in_parallel": self.in_parallel.model_copy(
                     deep=True,
                     update={
                         "steps": [
@@ -682,7 +681,7 @@ class In_parallel(YamlModel, StepABC, RewritesABC):
 
     def deep_merge(self, other: In_parallel) -> In_parallel:
         # For every item in the add it if it does not already exist
-        new_parallel = self.copy(deep=True)
+        new_parallel = self.model_copy(deep=True)
 
         for step in other.in_parallel.steps:
             if step in new_parallel.in_parallel.steps:
@@ -700,7 +699,7 @@ In_parallel.update_forward_refs()
 In_parallel.Config.update_forward_refs()
 
 
-class LogRetentionPolicy(YamlModel):
+class LogRetentionPolicy(BaseModel):
     """Log Retention for concoure job
 
     :param days: Number of days to keep logs for
@@ -716,7 +715,7 @@ class LogRetentionPolicy(YamlModel):
     minimum_succeeded_builds: int
 
 
-class Job(YamlModel, RewritesABC):
+class Job(BaseModel, RewritesABC):
     name: str
     plan: List[Step]
     old_name: Optional[str] = None
@@ -753,7 +752,7 @@ class Job(YamlModel, RewritesABC):
         self,
         resource_rewrites: Dict[str, str],
     ) -> Job:
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "plan": [
@@ -782,7 +781,7 @@ class Job(YamlModel, RewritesABC):
         handle_rewrites: Dict[str, str],
     ) -> Job:
 
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "plan": [step.handle_rewrite(handle_rewrites) for step in self.plan],
@@ -819,7 +818,7 @@ class Job(YamlModel, RewritesABC):
         if len(self.plan) != len(other.plan):
             raise Exception("deep_merge only when plans are same length")
 
-        return self.copy(
+        return self.model_copy(
             deep=True,
             update={
                 "plan": [
@@ -866,7 +865,7 @@ class Job(YamlModel, RewritesABC):
         return {}
 
 
-class Pipeline(YamlModel):
+class Pipeline(BaseModel):
     """Definition of a concourse plan"""
 
     resource_types: list[ResourceType] = Field(default_factory=list)
