@@ -182,7 +182,6 @@ class RewritesABC(ABC):
                     # print(new_target)
                     # Do not update ret_list via append as items are deep_merged in
                 else:
-
                     # Get the list of all names in output objects
                     namelist = [resource.name for resource in ret_list]
 
@@ -191,10 +190,12 @@ class RewritesABC(ABC):
                     # Update the new name with the proposed rewrite name
                     resource_rewrite_map[item.name] = alt_name
 
-                    ret_list.append(item.copy(deep=True, update={"name": alt_name}))
+                    ret_list.append(
+                        item.model_copy(deep=True, update={"name": alt_name})
+                    )
             else:  # Item is unique so add it
                 resource_rewrite_map[item.name] = item.name
-                ret_list.append(item.copy(deep=True))
+                ret_list.append(item.model_copy(deep=True))
 
         return ret_list, resource_rewrite_map
 
@@ -601,7 +602,6 @@ class Do(BaseModel, StepABC, RewritesABC):
         )
 
     def handles(self) -> List[Tuple[str, str]]:
-
         return [handle for step in self.do for handle in step.handles()]
 
 
@@ -623,7 +623,6 @@ class In_parallel(BaseModel, StepABC, RewritesABC):
 
     @classmethod
     def step_sortkey(cls, item: Step) -> str:
-
         return item.sort_key()
 
     def __eq__(self, other: In_parallel) -> bool:
@@ -634,9 +633,8 @@ class In_parallel(BaseModel, StepABC, RewritesABC):
             == sorted(other.in_parallel.steps, key=In_parallel.step_sortkey)
         )
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     def cooerce_compact_to_verbose_style(cls, values):
-
         if isinstance(values.get("in_parallel"), list):
             values["in_parallel"] = {"steps": values.get("in_parallel")}
         return values
@@ -687,7 +685,7 @@ class In_parallel(BaseModel, StepABC, RewritesABC):
             if step in new_parallel.in_parallel.steps:
                 print(f"Already have {step}")
             else:
-                new_parallel.in_parallel.steps.append(step.copy(deep=True))
+                new_parallel.in_parallel.steps.append(step.model_copy(deep=True))
 
         return new_parallel
 
@@ -780,7 +778,6 @@ class Job(BaseModel, RewritesABC):
         self,
         handle_rewrites: Dict[str, str],
     ) -> Job:
-
         return self.model_copy(
             deep=True,
             update={
@@ -804,7 +801,6 @@ class Job(BaseModel, RewritesABC):
         )
 
     def deep_merge(self, other: Job) -> Job:
-
         # Check rules before we attempt the deep_merge
         if (
             self.on_abort != other.on_abort
