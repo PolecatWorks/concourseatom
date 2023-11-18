@@ -1,8 +1,8 @@
 # https://concourse-ci.org/manual-trigger-example.html
 ---
-resource_types:
-- name: time
-  type: image
+# resource_types:
+# - name: time
+#   type: image
 resources:
 - name: every-30s
   type: time
