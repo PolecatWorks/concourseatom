@@ -393,7 +393,7 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         assert output == myObj.resource_rewrite(rewrites)
 
 
-@pytest.mark.skip
+# @pytest.mark.skip
 @pytest.mark.parametrize(
     "myClass, myYaml",
     [
@@ -475,9 +475,10 @@ def test_rewrites(myObj: Any, rewrites: Dict[str, str], output: Any, expectation
         ),
         (
             Output,
-            """\
-                name: 1
-                path: b""",
+            """
+                name: a
+                path: b
+            """,
         ),
         (
             Cache,
@@ -671,7 +672,6 @@ def test_Job():
     stream = to_yaml_str(test0)
 
     print(stream)
-
     test1 = parse_yaml_raw_as(Job, stream)
     assert test0 == test1
 
