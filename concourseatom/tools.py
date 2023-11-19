@@ -4,6 +4,7 @@
 """
 import sys
 import click
+from pydantic_yaml import parse_yaml_raw_as, to_yaml_str
 
 from concourseatom.models import Pipeline
 
@@ -90,12 +91,12 @@ def merge(ctx, infile0, infile1, deep):
         click.echo(f"Starting to merge0 {infile0.name}", err=True)
         click.echo(f"Starting to merge1 {infile1.name}", err=True)
 
-    pipe0 = Pipeline.model_validate(infile0)
-    pipe1 = Pipeline.model_validate(infile1)
+    pipe0 = parse_yaml_raw_as(Pipeline, infile0)
+    pipe1 = parse_yaml_raw_as(Pipeline, infile1)
 
     merge = Pipeline.merge(pipe0, pipe1)
 
-    click.echo(merge.yaml())
+    click.echo(to_yaml_str(merge))
 
 
 if __name__ == "__main__":
